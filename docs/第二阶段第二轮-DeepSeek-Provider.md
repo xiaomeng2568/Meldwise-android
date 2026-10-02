@@ -108,7 +108,7 @@ Key 缺失时会话仍可查看，发送前需要本地凭据准入。恢复不�
 | SecondProviderSecurityTests | 6 |
 | 合计 | 200 |
 
-assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndroidTest 均通过。两个 lint 各 0 错误 / 1 条既有 UseKtx 警告。AndroidTest 共编译 6 个测试方法，本轮未运行真机自动化测试。
+assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndroidTest 均通过。两个 lint 各 0 错误 / 1 条既有 UseKtx 警告。首次实现验证编译 6 个 AndroidTest；收尾增加一项显式 opt-in 的现有 DeepSeek 记录验收，最终共 7 个方法。收尾在真机分别执行 Keystore 与本地恢复核对各 1 项，均通过；其余方法未在本轮全量执行。
 
 10 个既有 compile/runtime 锁定依赖图全部解析成功。没有新增依赖；app/gradle.lockfile SHA-256 为 DD1A81F32D7A0E9B8DBC4CAB49EAE4AB794F07D13AD620FCF707AB456D5D76DB，settings-gradle.lockfile 为 6656E3AED66762D2F39666DE089080C66A3224078AABDF27764B041DA508DF84，均与基线一致。冻结规格 SHA-256 仍为 2F64D6C93FEF56184A4EA38B819389397C920B2D4268D888683D3033C0116A78。
 
@@ -116,11 +116,11 @@ assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndro
 
 测试只使用合成 Key/内容及回环 MockWebServer，没有真实服务商请求。取消测试用收到 TextDelta 的 CompletableDeferred 信号和未结束 HTTP 正文确认操作还在进行，随后取消；没有依靠固定延迟制造时序。
 
-本轮增加一个隔离 Android Keystore 的 DeepSeek 存储测试，作为真机存储验证准备。AndroidTest 编译通过与实际执行分开记录；Sprint 1 未完成的冷启动自动化限制继续保留。
+本轮新增的隔离 Android Keystore DeepSeek 存储测试已在真机执行通过。完整 Activity 冷启动自动化仍有限制，采用下文的独立本地恢复测试、正常启动记录和开发者界面观察收集证据。
 
 ## 已知限制与待验证
 
-开发者已确认真实目录、模型选择、聊天和中途取消可用；观察范围见下一节。OEM Keystore 的本轮新增 AndroidTest 仍仅完成编译，尚未在设备执行。
+开发者已确认真实目录、模型选择、聊天和中途取消可用；观察范围见下一节。本轮新增 DeepSeek Keystore AndroidTest 已在 vivo V2458A / Android 16 / SDK 36 执行通过，这一结果限该设备和测试用例。
 
 配置状态 READY 是本地准入，不是服务端认证成功。密码输入过程仍依赖开发者信任的键盘和系统环境。Debug APK 是工程验证包，Release 构建未配置发布签名。启动/切换零 DeepSeek 请求有源码检查和本地合成验证，尚无本轮真实设备抓包证据。
 
@@ -136,7 +136,7 @@ assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndro
 | 已有文字输出后中途取消 | PASS | 开发者明确确认输出到一半截停可用；未单独提供取消状态枚举或请求计数 |
 | 取消后强行停止应用 | PASS within tested scope | 开发者确认未发现异常；尚未确认本轮强停后的重新打开、记录恢复或自动续发情况 |
 
-这一反馈支持本轮 DeepSeek REAL PROVIDER PASS。服务端 response.completed 的逐字段真机诊断、本轮新增 Keystore 自动化执行、强停重开后的 DeepSeek 记录恢复，以及实际覆盖升级迁移仍为 NOT TESTED / 未单独采集。严格终态、单次 POST 和隔离边界的细项证据继续来自本地测试，不能用人工“无异常”反馈替代所有安全验证。
+这一反馈支持本轮 DeepSeek REAL PROVIDER PASS。服务端 response.completed 的逐字段真机诊断、实际覆盖升级迁移仍为 NOT TESTED / 未单独采集。严格终态、单次 POST 和隔离边界的细项证据继续来自本地测试，不能用人工“无异常”反馈替代所有安全验证。收尾补充了 Keystore 执行与强停重开恢复证据，见最终验收矩阵。
 
 没有因此追加真实请求、安装操作或功能开发。分支等待评审，SIWC 兼容性仍为 CONDITIONAL。
 
@@ -150,7 +150,7 @@ assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndro
 
 只提供脱敏状态截图/字段。Key、请求头、私人聊天、服务端原始错误和回调链接留在手机上。真实调用和 API 费用由开发者明确操作产生；没有自动余额查询。
 
-本轮提交留在 feature 分支。真机结果已收到，接下来等待评审；main、Release 和 tag 保持原样。
+本轮提交留在 feature 分支。真机结果已收到，收尾交付 Draft PR，push 与 pull_request CI 均成功且没有合并阻塞时转 Ready for Review。合并留给后续评审；main、Release 和 tag 保持原样。
 
 ## 验证包与提交
 
@@ -164,4 +164,46 @@ SHA-256：`585E059B740368FAAF98C14C72219D49BCF8E77B9B72439CA373FBC573A6C6EC`。
 
 选择并行验证的原因：实际比较发现当前构建账户的调试证书与 Sprint 1 APK 不同，原签名文件位于另一个受限构建账户，本轮无法访问。没有修改其权限、导出私钥或卸载旧应用。独立安装保留原数据，新的验证包从自己的空白沙箱开始；这不是覆盖升级/真实旧账号迁移的真机证据。旧记录迁移已经本地合成测试，真实覆盖升级仍待可用的原签名或统一签名方案后验证。
 
-工程分支已提交，尚未推送或创建 PR；代理没有进行远端写入、设备安装或真实 Provider 请求。上述真实 DeepSeek 操作由开发者本人完成。
+首次实现交付时分支仅本地提交。收尾安装的是独立 AndroidTest 组件，主应用及现有数据保留；代理没有发真实 Provider 请求。上述真实 DeepSeek 调用由开发者本人完成。GitHub 交付的具体 HEAD、push / pull_request run URL、结论和 Ready 状态记录在本轮 PR 描述中，核验后更新；未发生的 CI 结果不提前记为通过。
+
+## 最终验收矩阵
+
+收尾日期：2026-10-02（Asia/Shanghai）。开发者已评审接受 SPRINT 2 IMPLEMENTATION PASS 和 DEEPSEEK REAL PROVIDER PASS within tested scope。生产源码没有新增功能；收尾只增加一个验收 AndroidTest 和报告。
+
+| 分类 | 项目 | 最终结果与证据 |
+| --- | --- | --- |
+| LOCAL TESTED | Debug 全量单元测试 | 200 / 200，0 failures / errors / skipped；最终源码强制全量执行 |
+| LOCAL TESTED | Release 全量单元测试 | 200 / 200，0 failures / errors / skipped；包含全部 Sprint 1 回归 |
+| LOCAL TESTED | assembleDebug / assembleRelease | PASS；Release 未签名工程包，未创建发布 |
+| LOCAL TESTED | lintDebug / lintRelease | PASS；各 0 errors、1 条既有 UseKtx warning |
+| LOCAL TESTED | assembleDebugAndroidTest | PASS；7 个方法编译，区别于真机执行数量 |
+| LOCAL TESTED | dependency lock consistency | 10 / 10 既有依赖图解析成功；两份 lockfile 与基线散列一致 |
+| LOCAL TESTED | 旧聊天迁移 / 严格终态 / 无回退和重放 | PASS；合成测试，范围见本地验证章节 |
+| REAL DEVICE TESTED | DeepSeek API Key 加密存储 | PASS；deepseekKeyReplaceRemoveAndCorruptionNoProvider，OK (1 test)，0.135 秒；隔离 alias / 文件和合成 Key，仅清理测试夹具 |
+| REAL DEVICE TESTED | 现有 DeepSeek 凭据及聊天恢复 | PASS；existingEncryptedSessionRestoresWithoutProviderRequest，OK (1 test)，0.075 秒；在强停后的新进程内，以新 AppContainer / MainViewModel 独立读取现有加密数据 |
+| REAL DEVICE TESTED | providerId / modelId 归属 | preserved=true；进程内比较原记录与恢复记录，模型值、消息 ID 和文本均未输出 |
+| REAL DEVICE TESTED | 恢复阶段自动操作 | startup_no_provider_requests=true；automatic_model_load_inference_continuation_retry_fallback=false；两个本地容器的 NetworkClient callStart 计数均为 0，目录/选择和忙碌状态检查通过 |
+| REAL DEVICE TESTED | 正常重开应用 | shell 正常启动 Status=ok、LaunchState=COLD、TotalTime=384ms；开发者确认重开正常。Activity 启动与本地状态核对分开记录 |
+| REAL DEVICE TESTED | 真实目录 / 聊天 / 部分输出后取消 | PASS within tested scope；开发者已评审接受，本次未重复服务商调用 |
+| NOT TESTED | Sprint 1 → Sprint 2 真实覆盖升级 | 保留；debug 签名不同，现有两套安装隔离；未复制、导出旧签名或改变访问权限 |
+| NOT TESTED | 真实响应的逐字段终态 / 请求抓包审计 | 本轮人工反馈没有这些遥测；本地协议/单次 POST 测试通过不等于逐条真实抓包证明 |
+| NOT TESTED | 全套 AndroidTest、OEM 广泛适配、长周期等 | 本轮只定向执行上述 2 项；其他设备、长期到期、真实刷新网络中断、跨进程协调、断电、安全审计保持原限制 |
+| KNOWN LIMITATIONS | 完整 Activity 冷启动自动化 | 尝试未返回最终 JUnit 结果，主动强停终止；出现 Process crashed 是终止测试产生的结果，记为 INCONCLUSIVE，未声称 Activity 自动化 PASS。试验性扩展已撤去，既有测试保持原样；新的本地恢复测试不启动 Activity |
+| KNOWN LIMITATIONS | 自动请求证据窗口 | 计数证据覆盖真实设备上的本地 MainViewModel 初始化/恢复；正常独立 Activity 重开采用启动记录、开发者观察和源码边界，无持续设备抓包 |
+| KNOWN LIMITATIONS | SIWC | 兼容性仍为 CONDITIONAL；本轮 DeepSeek 验收不提升 SIWC 结论 |
+
+### 定向真机测试复现
+
+以下只用于已配置并有现存 DeepSeek 会话的验收设备。默认全套测试会跳过 opt-in 的现存状态测试；空白设备不会被填入凭据。
+
+```text
+am instrument -w -r -e class io.github.xiaomeng2568.meldwise.KeystoreStorageTest#deepseekKeyReplaceRemoveAndCorruptionNoProvider io.github.xiaomeng2568.meldwise.sprint2.test/androidx.test.runner.AndroidJUnitRunner
+am force-stop io.github.xiaomeng2568.meldwise.sprint2
+am instrument -w -r -e existingDeepSeekAcceptance true -e class io.github.xiaomeng2568.meldwise.DeepSeekLocalAcceptanceTest#existingEncryptedSessionRestoresWithoutProviderRequest io.github.xiaomeng2568.meldwise.sprint2.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+恢复核对只输出固定布尔字段。Key、聊天正文、模型值、账号、请求头都留在设备进程内。已有凭据没有替换、删除；聊天没有播种或续发。测试结束清理 ViewModel 引用，随后正常打开主应用。
+
+### GitHub 交付判定
+
+验收代码和报告统一提交到 feature/p2-sprint2-deepseek-provider，正常 push，PR 指向 main。Draft 转 Ready 的条件是最新分支 HEAD 的 push 与 pull_request CI 均 SUCCESS，且没有合并阻塞；具体结果以 PR 最新描述中的链接和 SHA 核对。STOP BEFORE MERGE：本轮仅交付待合并 PR。
