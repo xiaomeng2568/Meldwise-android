@@ -114,6 +114,9 @@ class TokenManager(private val store: CredentialStore, private val endpoint: Ref
                 }
                 saveLocked(next); publish()
                 lastFailure=session.generation to failure.reason
+                // Settle the attempt: callers already waiting must see its failure, while a NEW
+                // explicit call entering after settlement may retry a confirmed-not-sent failure.
+                refreshAttempt++
                 throw AuthFailure(if (failure.rotationUncertain) AuthReason.UNCERTAIN_ROTATION else failure.reason)
             } catch (failure: CancellationException) {
                 if (current?.phase == CredentialPhase.REFRESH_IN_FLIGHT) {

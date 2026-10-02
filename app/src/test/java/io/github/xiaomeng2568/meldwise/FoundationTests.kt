@@ -78,10 +78,35 @@ class FoundationTests {
         assertEquals(listOf(CredentialPhase.REFRESH_IN_FLIGHT,CredentialPhase.ACTIVE),store.writes.map {it.phase})
     }
     @Test fun noAutomaticRetryForWaitingFailedCallers()=runTest {
-        var calls=0;val manager=TokenManager(Store(session()),RefreshEndpointFake { _,_->calls++;delay(100);throw RefreshFailure(AuthReason.NETWORK,false) },TimeSource {0})
+        val ownerEntered=CompletableDeferred<Unit>()
+        val releaseFailure=CompletableDeferred<Unit>()
+        val store=Store(session());var calls=0
+        val manager=TokenManager(store,RefreshEndpointFake { _,_->
+            calls++
+            ownerEntered.complete(Unit)
+            releaseFailure.await()
+            throw RefreshFailure(AuthReason.NETWORK,false)
+        },TimeSource {0})
         manager.initialize()
-        val outcomes=(1..3).map { async { try {manager.accessToken();null} catch(f:AuthFailure) {f.reason} } }.awaitAll()
+        suspend fun outcome():AuthReason? = try {manager.accessToken();null} catch(f:AuthFailure) {f.reason}
+        val owner=async {outcome()}
+        ownerEntered.await()
+        assertEquals(AuthState.Refreshing,manager.state.value)
+        assertEquals(CredentialPhase.REFRESH_IN_FLIGHT,store.session!!.phase)
+        // UNDISPATCHED runs accessToken through attempt capture to its first suspension.
+        // The owner holds the mutex at the endpoint barrier: that suspension MUST be mutex.lock.
+        val waiters=(1..2).map {async(start=CoroutineStart.UNDISPATCHED) {outcome()}}
+        assertFalse(owner.isCompleted)
+        assertTrue(waiters.all {it.isActive && !it.isCompleted})
+        assertEquals(1,calls)
+        releaseFailure.complete(Unit)
+        val outcomes=(listOf(owner)+waiters).awaitAll()
         assertEquals(List(3) { AuthReason.NETWORK },outcomes);assertEquals(1,calls)
+        assertEquals(CredentialPhase.ACTIVE,store.session!!.phase)
+        assertEquals(1L,store.session!!.generation)
+        // A new explicit request AFTER settlement is not an existing waiter and may try again.
+        assertEquals(AuthReason.NETWORK,outcome())
+        assertEquals(2,calls)
     }
     @Test fun coldLoadNearExpiryRefreshes()=runTest {
         var calls=0;val manager=TokenManager(Store(session()),RefreshEndpointFake { _,_->calls++;credentials(100000) },TimeSource {0})
