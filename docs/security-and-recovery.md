@@ -96,3 +96,9 @@ Four isolated real-device Keystore/storage tests already passed; full cold-start
 ## FINAL DEVELOPER ACCEPTANCE — Sprint 1 closure
 
 Developer-observed cold restart/reopen, offline behavior and encrypted/local persistence/chat restoration are explicitly accepted PASS within tested scope. Manual behavioral acceptance supersedes prior pending rows; it does not fabricate instrumented process/counter traces or complete the unresolved cold Activity test. No extra provider operation, crypto/storage change, fallback, retry or security relaxation is introduced. Long-term rotation/network/cross-process/physical-device/audit limitations remain NOT TESTED. Four real isolated Android Keystore tests and full local security regressions remain the measured technical evidence. Final CI/merge status appears in [final acceptance](phase-2-sprint-1-final-acceptance.md); SIWC remains CONDITIONAL regardless of Sprint acceptance.
+
+## FINAL CLOSURE / 最终收尾
+
+Sprint 1 acceptance completed within documented scope; no unresolved HIGH internal-review finding. Final production-head push/PR CI succeeded, PR #1 safely squash merged as 3a77e96abf649bdfbfb909272229c8b686e1a5e6, main CI 37005311207 succeeded. Product-source equivalence verified against accepted APK sources. Final follow-up edits documentation only; no auth/token/credential/network behavior changes. SIWC remains CONDITIONAL; unresolved automation and long-term NOT TESTED items remain explicitly documented, not hidden or relabeled PASS.
+
+内部安全验收与新 HEAD CI 通过，PR 已安全合并，最后只补写文档并核验 main CI。人工真机观察不冒充自动测试、抓包或外部审计；不改既有安全控制、不增加服务请求、不宣称无条件生产就绪。

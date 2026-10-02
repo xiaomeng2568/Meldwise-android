@@ -101,3 +101,9 @@ Records retained and no automatic continuation were reported after the earlier c
 The developer has now explicitly confirmed cold restart/reopen, offline/network-disconnected behavior, and encrypted/local persistence/chat state restoration: PASS within tested scope. This supersedes the earlier pending behavioral rows. Evidence is manual developer observation, not a newly completed automation run; no process-ID transcript, packet capture, exact offline error category or new per-message recovery screenshot was supplied. The cold Activity instrumentation remains NOT COMPLETED and is disclosed as an automation limitation, not 5/5 PASS. The four isolated physical Keystore/storage tests remain PASS.
 
 No accepted provider/model/inference tests are repeated. Earlier normal chat and mid-stream cancellation evidence remains valid. Final promotion/merge requires clean production HEAD and both new-HEAD CI triggers successful. Final actual closure status is maintained in [final acceptance](phase-2-sprint-1-final-acceptance.md); SIWC compatibility stays CONDITIONAL.
+
+## FINAL CLOSURE / 最终收尾
+
+PHASE 2 SPRINT 1: ACCEPTED within documented tested scope. Developer lifecycle/offline/local persistence acceptance completes the behavioral rows; the cold-start automation limitation is retained. PR #1 merged as 3a77e96abf649bdfbfb909272229c8b686e1a5e6. Final production HEAD b51fda7802d3ac3d6a811745f60b03db9afa229b push/PR CI succeeded (37004875347 / 37004881978); merged main CI succeeded (37005311207). No device/provider tests repeated during closure. See [final report](phase-2-sprint-1-final-acceptance.md).
+
+Sprint 1 已在记录范围内验收通过并合并，真机行为来自开发者确认，自动冷启动未完成仍如实保留。SIWC 仍有条件兼容，未宣称公共生产就绪；最终纯文档更新也需核验 main CI，之后停止。

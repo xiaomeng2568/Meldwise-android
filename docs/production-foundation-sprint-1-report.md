@@ -1,6 +1,6 @@
 # Meldwise Production Foundation Sprint 1 Report
 
-记录日期：2026-10-02（Asia/Shanghai）。当前结论：**最终集成与本地验证通过；最终真机与新 HEAD CI 验收待完成，PR 保持 Draft。不是生产发布批准。** 第 1–6 节保留初始交付历史，最新状态以末尾 SPRINT 1 FINAL ACCEPTANCE 和最终验收报告为准。
+记录日期：2026-10-02（Asia/Shanghai）。最终结论：**PHASE 2 SPRINT 1: ACCEPTED（已记录测试范围内）。PR #1 已安全合并；SIWC 兼容性仍 CONDITIONAL，不是公共生产发布批准。** 第 1–6 节及中间检查点保留历史，最新状态以末尾最终收尾和最终验收报告为准。
 
 Phase 1 决策：GO TO PRODUCTION IMPLEMENTATION；SIWC compatibility：CONDITIONAL，二者不互相替代。
 
@@ -140,3 +140,9 @@ Sprint 2、API-key provider、DeepSeek、Compare/Collaborate/Debate/Judge、rele
 开发者现已明确确认：冷重启/重开、离线/断网行为、加密本地持久化及聊天状态恢复，均在测试范围内 PASS。上述行为项的“尚未验收”记录现由这份明确人工确认补齐；冷启动自动测试未完成的事实仍保留，不改写为自动测试成功，不声称 5/5 真机自动测试通过，也不声称进程 ID/网络抓包级证明。
 
 不重复已接受的授权、模型或推理测试。提交已有 AndroidTest/集成/报告修改，等待新 HEAD 的 push 和 pull_request CI 均成功后才推进 PR #1；实际合并 SHA、CI 与最终结论见[最终验收报告](phase-2-sprint-1-final-acceptance.md)。SIWC compatibility 仍 CONDITIONAL，长期未测试项保持不变，不开始 Sprint 2。
+
+## 最终收尾 / Final closure
+
+最终生产 HEAD：b51fda7802d3ac3d6a811745f60b03db9afa229b。push CI 37004875347、PR CI 37004881978 均成功。PR #1 已更新为双语、转为 Ready，并按确切 HEAD 安全 squash 合并为 main 提交 3a77e96abf649bdfbfb909272229c8b686e1a5e6；合并后 main CI 37005311207 成功，内容与最终生产分支一致。最后用纯文档提交补写实际结果，并核验其 main CI。不重复真机/服务请求，自动冷启动未完成与长期未测试项均保留。
+
+PHASE 2 SPRINT 1: ACCEPTED within documented tested scope. Exact-head push/PR CI and squash/main CI passed; final report-only follow-up does not change production sources. SIWC compatibility remains CONDITIONAL. README/PR/report summary are bilingual; no public release or Sprint 2.

@@ -70,3 +70,10 @@ Recorded explicit developer PASS within tested scope for cold restart/reopen, of
 
 - README and final acceptance summary now use Chinese/English presentation as requested. PR closure description will be bilingual. Documentation only; product sources and tested APK remain unchanged.
 - 按要求提供中英双语 README、最终验收摘要及 PR 收尾描述；仅修改文档，不更改产品源码或已验收 APK。
+
+## 2026-10-02 — Final merge verification / 最终合并核验
+
+- Production final HEAD b51fda7802d3ac3d6a811745f60b03db9afa229b was clean, normally pushed; exact-head push CI 37004875347 and PR CI 37004881978 succeeded.
+- PR #1 description updated bilingually, promoted to Ready, squash merged with expected-head guard as 3a77e96abf649bdfbfb909272229c8b686e1a5e6; main CI 37005311207 succeeded and integration tree matched production exactly.
+- Final documentation-only follow-up records actual results; verify its main CI separately. No product/security changes or provider operations. PHASE 2 SPRINT 1: ACCEPTED; SIWC remains CONDITIONAL. No Sprint 2/release.
+- 最终生产分支干净并正常推送，两类新 HEAD CI 与合并后的 main CI 均成功；双语 PR 已转为 Ready 并安全 squash 合并。补写实际结果的纯文档提交仍需独立核验 main CI；不改产品代码、不重复模型测试，保留所有长期未测试项。

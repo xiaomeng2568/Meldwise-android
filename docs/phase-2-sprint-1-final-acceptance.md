@@ -1,26 +1,27 @@
 # Phase 2 Sprint 1 — Final Acceptance and Closure
 
-Date: 2026-10-02 (Asia/Shanghai). Developer-observed remaining real-device acceptance is now confirmed PASS within tested scope. This pre-merge checkpoint awaits new-HEAD CI and merge verification; it is not a release announcement. SIWC compatibility: CONDITIONAL.
+Date: 2026-10-02 (Asia/Shanghai). Final Sprint 1 integration and merge verification completed. Developer-observed real-device acceptance is PASS within tested scope. SIWC compatibility remains CONDITIONAL; this is not a public release or unconditional production-readiness claim.
 
-PHASE 2 SPRINT 1: CONDITIONAL
+PHASE 2 SPRINT 1: ACCEPTED
 
 ## 中文摘要 / Chinese summary
 
 开发者已明确确认冷重启/重开、离线/断网、加密本地持久化及聊天状态恢复在测试范围内 PASS；正常聊天和流式取消已有真机截图证据。Debug / Release 各 104 项完整测试通过，两种构建通过、lint 均 0 错误/1 条既有警告；实际 Keystore 存储测试 4 项通过。冷启动自动测试仍未完成，不宣称 5/5 自动测试通过；人工确认不等于网络抓包/进程计数级证明。
 
-本检查点等待最终 HEAD 的两类 CI 及安全合并后核验；真实提交与 CI 记录将在收尾时补齐。Sprint 验收与 SIWC 兼容性分开判断：SIWC 始终 CONDITIONAL，长期未测试项不改写为通过，不重复服务端测试，不开始 Sprint 2 或公共发布。
+最终生产 HEAD b51fda7 的 push 与 PR CI 均成功；PR #1 已从 Draft 转为 Ready for Review，并安全 squash 合并到 main（3a77e96）。合并后的 main CI 37005311207 成功，main 与合并前生产分支的内容一致。本报告通过合并后的纯文档收尾提交记录已发生的结果；该文档提交不改变产品代码。Sprint 验收与 SIWC 兼容性分开判断：Sprint 1 ACCEPTED，SIWC 仍 CONDITIONAL，长期未测试项不改写为通过，不重复服务端测试，不开始 Sprint 2 或公共发布。
 
 ## 1. Revision and artifact identity
 
 | Item | Actual value/status |
 | --- | --- |
-| Existing PR | [#1](https://github.com/xiaomeng2568/Meldwise-android/pull/1), Draft/open, not merged |
-| Main currently observed | dccaab36328c60975e5515198ef680a5413039a2; no final merge commit yet |
-| Final merged PR / final main SHA | PENDING; do not substitute an old SHA or invent a squash result |
+| Merged PR | [#1](https://github.com/xiaomeng2568/Meldwise-android/pull/1), closed/merged; promoted from Draft to Ready before squash |
+| Main implementation/squash SHA | 3a77e96abf649bdfbfb909272229c8b686e1a5e6 |
+| Main before integration | dccaab36328c60975e5515198ef680a5413039a2 |
 | Production branch | production/foundation-sprint-1 |
 | Integration commit | d657974389c8f1ca31be11c3938f00e519deae51 |
 | Tested production APK source | 2befd45329673f17f696ebb8e3a53257334e5da1; subsequent AndroidTest/report changes do not change product sources |
-| Production final acceptance/report HEAD | PENDING; documentation commits may follow tested source, with source equivalence checked |
+| Final production branch HEAD | b51fda7802d3ac3d6a811745f60b03db9afa229b; both new-HEAD CI triggers succeeded |
+| Final report follow-up | Documentation-only main follow-up records actual merge and CI; implementation SHA above is not mislabeled as that follow-up's self-referential commit SHA |
 | Package | io.github.xiaomeng2568.meldwise |
 | Version | versionCode 100; 0.3-p2-foundation-sprint1 |
 | Debug APK | artifacts/Meldwise-P2-Sprint1-Final-Acceptance.apk |
@@ -64,7 +65,7 @@ Build prerequisite issue: Windows generated-output ACL mismatch prevented the or
 
 ## 4. REAL DEVICE TESTED
 
-Device: vivo V2458A; Android 16 / SDK 36. Final integrated APK only; Host A/B not used. Current pending matrix is not PASS by inheritance from prior screenshots.
+Device: vivo V2458A; Android 16 / SDK 36. Final integrated APK only; Host A/B not used. The matrix separates newly developer-confirmed behavior, screenshot metadata and actual automated results; no automatic test is marked PASS by inheritance.
 
 | Merge-blocking item | Final APK result | Evidence |
 | --- | --- | --- |
@@ -90,7 +91,7 @@ Cold Activity automated-test limitation: the initial full runner emitted current
 
 Non-responsive runners were explicitly stopped with a scoped application force-stop. Their subsequent raw non-secret output was `INSTRUMENTATION_RESULT: shortMsg=Process crashed.` / `INSTRUMENTATION_CODE: 0`. That message follows the deliberate termination; it is not evidence of a spontaneous production crash. No test failure was hidden or converted to PASS. A subsequent ordinary Activity launch returned Status ok / LaunchState COLD (663 ms), but that alone does not prove credential/journal restoration or zero startup requests.
 
-Automated local tests initiated no provider action. Subsequently the developer manually supplied normal-chat, pre-response cancellation and mid-stream cancellation evidence; these are distinct observed requests, not a claim that the campaign had only one request in total. No further provider test is needed or authorized for closure. The 19:26 cancellation shows one exchange and no successful terminal event; it does not establish server-side compute cancellation or an extended no-replay observation window. The developer subsequently accepted cold restart/reopen, offline behavior and persistence/chat restoration. Merge still requires a clean branch and actual new-HEAD push/PR CI success. No real token, callback URL, account identity, prompt or response text belongs in this report.
+Automated local tests initiated no provider action. Subsequently the developer manually supplied normal-chat, pre-response cancellation and mid-stream cancellation evidence; these are distinct observed requests, not a claim that the campaign had only one request in total. No further provider test is needed or authorized for closure. The 19:26 cancellation shows one exchange and no successful terminal event; it does not establish server-side compute cancellation or an extended no-replay observation window. The developer subsequently accepted cold restart/reopen, offline behavior and persistence/chat restoration. A clean branch and actual new-HEAD push/PR CI success were verified before merge. No real token, callback URL, account identity, prompt or response text belongs in this report.
 
 ## 5. GITHUB CI VERIFIED
 
@@ -98,11 +99,11 @@ Automated local tests initiated no provider action. Subsequently the developer m
 | --- | --- | --- |
 | b8dc1af3b92bb8d72cd2a274f20509ff33cb10d2 (historical) | push | [success / run 36976649208](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/36976649208) |
 | Same historical revision | pull_request | [success / run 36976654511](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/36976654511) |
-| Final integrated/report HEAD | push | PENDING / not yet pushed |
-| Same final HEAD | pull_request | PENDING / not yet pushed |
-| Post-merge main | push, if triggered | NOT RUN; no merge yet |
+| b51fda7802d3ac3d6a811745f60b03db9afa229b (final production HEAD) | push | [SUCCESS / run 37004875347](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37004875347) |
+| Same final production HEAD | pull_request | [SUCCESS / run 37004881978](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37004881978) |
+| 3a77e96abf649bdfbfb909272229c8b686e1a5e6 (main squash) | push / main | [SUCCESS / run 37005311207](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37005311207) |
 
-Both triggers must reference the final production HEAD and succeed. Historical CI or local tests do not substitute. After any report/source commit that changes HEAD, evaluate the new runs before promotion.
+Both required triggers completed successfully on the exact final production HEAD before promotion. Earlier 7a83d17 checks also passed, but were not substituted for the later bilingual-documentation HEAD. Main CI succeeded on the actual squash commit. CI is Debug assemble/unit/lint, not device instrumentation or Release verification; full Release evidence is the local suite above. A post-merge report-only main follow-up must also have its own triggered main CI verified before final handoff; no product source changes are made by that follow-up.
 
 ## 6. Security review
 
@@ -120,13 +121,13 @@ Tracked-files review found no APK/JKS/keystore/private keys/local.properties/.id
 
 ## 8. Merge decision and stop conditions
 
-Pre-merge closure decision: pending new-HEAD CI and merge verification. All required real-device behavioral checks are now developer-accepted within tested scope; the unresolved cold-start automation remains a disclosed limitation, not a hidden PASS. Local source/security verification and four physical-device storage tests passed. SIWC compatibility remains CONDITIONAL. A clean committed production branch and successful push + pull_request checks on the new HEAD are still required before promotion. Earlier 19:28 GitHub checkpoint (Draft/open, remote head b8dc1af, main dccaab3) is historical; final actual commit/run/merge values will be recorded after successful execution. No release/tag or Sprint 2 is authorized.
+Final decision: PHASE 2 SPRINT 1: ACCEPTED within the documented tested scope. Real-device behavior is developer-accepted; the unresolved cold-start automation remains an explicit limitation, not a fabricated automated PASS. Local source/security verification, four physical-device storage tests, clean production branch, new-HEAD push/PR CI and safe squash/main CI verification all passed. PR #1 is merged. SIWC compatibility remains CONDITIONAL. The earlier 19:28 pending snapshot is historical and superseded by this closure. No release/tag or Sprint 2 is authorized.
 
-Required before promotion: clean production branch; full Debug/Release/build/lint gates; real Keystore/credential restore; genuine process/force-stop recovery with zero automatic calls; final catalog/chat/completion; separately approved truthful cancellation with one exchange; real journal restoration; new-HEAD push and PR CI; no tracked secrets/machine artifacts; no unresolved HIGH finding.
+Merge gate satisfied by measured local/Keystore/CI evidence, accepted real-device catalog/chat/cancellation evidence, and explicit developer-reviewed lifecycle/offline/local-restoration results. Startup no-automatic-request controls were reviewed in source; no instrumented startup counter or packet audit is invented. No tracked secret/machine artifact or unresolved HIGH internal-review finding was identified.
 
 Evidence method: lifecycle/offline/local-restoration acceptance is explicit developer observation; no instrumented process-ID trace or packet audit is claimed. The developer-approved tested scope is combined with the existing no-automatic-request source review and isolated synthetic recovery tests. No tests or security assertions were removed to achieve closure.
 
-On any FAIL/BLOCKED gate, stop and report exact evidence. ACCEPTED may be written only after the merge decision gate actually passes. If all pass, promote existing PR #1, safe squash merge with expected HEAD, fetch/verify main and its CI, then safely clean integrated remote branches. No force-push/protection bypass. Final main SHA and actual run IDs must be recorded, not predicted.
+PR promotion and squash used the exact expected production HEAD; no force-push or branch-protection bypass. GitHub connector PR write returned 403, so already-configured local repository credentials were used in memory for the explicitly authorized PR actions. They were never printed or persisted. Merge response and read-only PR state independently confirmed the same actual squash SHA. Fetch confirmed main; a full-tree diff between final production HEAD and main squash was empty. A post-merge documentation-only record is allowed; verify its main CI too. Clean integrated remote branches only after successful main verification; preserve local audit checkouts/artifacts and Phase 1/frozen evidence.
 
 ## 9. DEFERRED TO FUTURE
 
@@ -134,4 +135,14 @@ No Sprint 2, API-key provider, DeepSeek, Compare, Collaborate, Debate, Judge, re
 
 ## 10. Latest checkpoint and evidence provenance
 
-See [current Chinese status report](phase-2-sprint-1-current-status-2026-10-02.md). New evidence is developer-supplied screenshots and statements, not agent-operated device tests. Screenshot sources: Screenshot_20261002_192643.jpg (cancelled partial-output UI), Screenshot_20261002_192646.jpg (sanitized diagnostics), Screenshot_20261002_190102.jpg (earlier pre-response cancellation), and the 18:58 diagnostic screenshot previously supplied. Only booleans, counts and fixed categories are transcribed; conversation text and raw screenshot images are not copied into the repository. This update changes documentation only and makes no new execution or merge claim.
+The [19:28 Chinese status snapshot](phase-2-sprint-1-current-status-2026-10-02.md) is retained as history, not the final decision. Device evidence is developer-supplied screenshots/statements, not newly agent-operated device tests. Sources: Screenshot_20261002_192643.jpg (cancelled partial-output UI), Screenshot_20261002_192646.jpg (sanitized diagnostics), Screenshot_20261002_190102.jpg (earlier pre-response cancellation), the prior 18:58 diagnostic screenshot, and the latest explicit developer lifecycle/offline/persistence acceptance. Only booleans, counts and fixed categories are transcribed; conversation text and raw screenshots are not copied into Git. Repository/CI/merge results above were actually executed/observed during closure; they are separate from human-observed device evidence.
+
+## 11. Closure / 收尾
+
+- Accepted integration contains all diagnostic fixes; auth/storage/refresh security semantics preserved. Final pre-merge production branch was clean and normally pushed.
+- README and PR description are Chinese/English. The report includes a Chinese summary and detailed evidence limits.
+- No accepted provider/model/inference experiment was repeated, no app reinstalled, no token/credential values exported.
+- Sprint 1 is accepted within tested scope, not certified production ready. SIWC remains CONDITIONAL and all long-term NOT TESTED items remain explicit.
+- Stop after final report/main-CI verification. No Sprint 2, additional provider, feature, release/tag or store submission.
+
+已完成集成、最终分支提交/正常推送、两类新 HEAD CI、双语 PR 描述、Draft 转 Ready、安全 squash 合并及合并后 main CI 核验。原有 AndroidTest 自动冷启动未完成的事实继续保留；人工真机验收不改写为自动测试成功。最终报告属于合并后的纯文档记录，也需核验其 main CI。保留本地工程、APK 和 Phase 1 冻结证据；完成后停止。
