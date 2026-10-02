@@ -6,7 +6,10 @@ import kotlinx.serialization.json.*
 internal class ResponseProtocolFailure(val stage:InferenceStage,val protocol:InferenceProtocol):Exception(protocol.name)
 
 /** Stream output items, rather than a possibly empty completed envelope, own assistant extraction. */
-class ResponsesReader(private val trace:InferenceTrace=InferenceTrace()) {
+class ResponsesReader(private val trace:InferenceTrace=InferenceTrace(),
+    private val errorMapper:(Int,String?,Boolean)->LlmError=ProviderErrors::map,
+    private val explicitIncomplete:Boolean=false,
+    private val codeCategory:(String?)->ProviderCode=::providerCode) {
     private val assistants=mutableSetOf<Int>()
     private val items=mutableMapOf<Int,String>()
     private val text=mutableMapOf<Pair<Int,Int>,StringBuilder>()
@@ -118,10 +121,11 @@ class ResponsesReader(private val trace:InferenceTrace=InferenceTrace()) {
                 val code=(obj["error"] as? JsonObject)?.let { string(it,"code") }
                     ?: (obj["response"] as? JsonObject)?.get("error")?.let { it as? JsonObject }?.let { string(it,"code") }
                     ?: if(type=="error") string(obj,"code") else null
-                val error=ProviderErrors.map(200,code,produced)
-                terminal=true; trace.update { it.copy(providerCode=providerCode(code)) }
+                val error=if(explicitIncomplete && type=="response.incomplete") LlmError(ErrorKind.STREAM_INTERRUPTED,mayHaveProducedOutput=produced)
+                    else errorMapper(200,code,produced)
+                terminal=true; trace.update { it.copy(providerCode=codeCategory(code)) }
                 trace.finish(InferenceStage.PROVIDER_FAILED,result=error.kind)
-                listOf(if(produced) LlmEvent.Incomplete(error) else LlmEvent.Failed(error))
+                listOf(if(produced || (explicitIncomplete && type=="response.incomplete")) LlmEvent.Incomplete(error) else LlmEvent.Failed(error))
             }
             "response.refusal.delta","response.refusal.done"->{
                 terminal=true;trace.finish(InferenceStage.PROVIDER_FAILED,result=ErrorKind.CONTENT_REJECTED)

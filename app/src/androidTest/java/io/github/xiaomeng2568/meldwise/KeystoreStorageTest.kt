@@ -78,4 +78,15 @@ class KeystoreStorageTest {
             KeyStore.getInstance("AndroidKeyStore").apply {load(null);deleteEntry(alias)}
         }
     }
+    @Test fun deepseekKeyReplaceRemoveAndCorruptionNoProvider()=isolated("deepseek") {blob,key ->
+        fun store()=DeepSeekCredentials(blob,AesGcmBox(key::get,"instrumentation-only-deepseek"))
+        store().replace("synthetic-deepseek-key")
+        assertEquals(ApiKeyState.CONFIGURED,store().state())
+        assertFalse(requireNotNull(blob.read()).toString(Charsets.ISO_8859_1).contains("synthetic-deepseek-key"))
+        store().replace("synthetic-deepseek-replacement");assertEquals(ApiKeyState.CONFIGURED,store().state())
+        store().remove();assertEquals(ApiKeyState.MISSING,store().state())
+        store().replace("synthetic-deepseek-key")
+        val corrupted=requireNotNull(blob.read());corrupted[20]=(corrupted[20].toInt() xor 1).toByte();blob.write(corrupted)
+        assertEquals(ApiKeyState.UNAVAILABLE,store().state())
+    }
 }

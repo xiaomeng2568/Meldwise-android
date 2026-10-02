@@ -6,6 +6,8 @@ import io.github.xiaomeng2568.meldwise.auth.*
 import io.github.xiaomeng2568.meldwise.security.*
 import io.github.xiaomeng2568.meldwise.network.*
 import io.github.xiaomeng2568.meldwise.provider.ChatGptProvider
+import io.github.xiaomeng2568.meldwise.provider.DeepSeekProvider
+import io.github.xiaomeng2568.meldwise.provider.ProviderRegistry
 import io.github.xiaomeng2568.meldwise.data.ChatRepository
 import okhttp3.Request
 import java.io.File
@@ -29,6 +31,11 @@ class AppContainer(context:Context) {
         AesGcmBox(credentialKey::get,"meldwise.credentials.v1")),endpoint)
     val oauth=OAuthCoordinator(identity::load,tokens,metadata,endpoint,validator)
     val provider=ChatGptProvider(tokens,network)
+    private val deepSeekKey=AndroidKey("meldwise.deepseek.apikey.v1")
+    val deepSeekCredentials=DeepSeekCredentials(AndroidAtomicBlob(File(directory,"deepseek-apikey.v1"),8192),
+        AesGcmBox(deepSeekKey::get,"meldwise.deepseek.apikey.v1",8192))
+    val deepSeek=DeepSeekProvider(deepSeekCredentials,network)
+    val providers=ProviderRegistry(listOf(provider,deepSeek))
     val chat=ChatRepository(AndroidAtomicBlob(File(directory,"chat.v1"),8_388_640),
         AesGcmBox(chatKey::get,"meldwise.chat.v1",8_388_640))
 }
