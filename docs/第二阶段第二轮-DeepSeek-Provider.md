@@ -1,10 +1,10 @@
 # Phase 2 Sprint 2：DeepSeek 接入记录
 
-日期：2026-10-02（Asia/Shanghai）。本轮接入第二家服务商，验证现有 Provider 基础。真实 DeepSeek 验证留给开发者在手机里操作。
+日期：2026-10-02（Asia/Shanghai）。本轮接入第二家服务商，验证现有 Provider 基础。开发者已在手机上完成本轮真实 DeepSeek 验证。
 
 SPRINT 2 IMPLEMENTATION：PASS（实现及本地验证范围）。
 
-DEEPSEEK REAL PROVIDER：NOT TESTED。
+DEEPSEEK REAL PROVIDER：PASS（开发者真机观察，限本轮已测试范围）。
 
 ## 基线和范围
 
@@ -120,13 +120,27 @@ assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndro
 
 ## 已知限制与待验证
 
-DeepSeek REAL PROVIDER 和本轮新界面的真机交互尚未验证。API Key 有效性、真实目录内容、真实 SSE、网络取消和 OEM Keystore 行为要用最终 APK 收集。
+开发者已确认真实目录、模型选择、聊天和中途取消可用；观察范围见下一节。OEM Keystore 的本轮新增 AndroidTest 仍仅完成编译，尚未在设备执行。
 
 配置状态 READY 是本地准入，不是服务端认证成功。密码输入过程仍依赖开发者信任的键盘和系统环境。Debug APK 是工程验证包，Release 构建未配置发布签名。启动/切换零 DeepSeek 请求有源码检查和本地合成验证，尚无本轮真实设备抓包证据。
 
 长周期自然到期、两台物理设备、真实刷新轮换网络中断、跨进程刷新、独立安全审计、OEM 备份行为、断电恢复和硬件级 Keystore 保证继续留为 NOT TESTED。SIWC 仍为 CONDITIONAL。
 
-## 一次真机验证步骤
+## 开发者真机验证结果
+
+2026-10-02，开发者反馈：“都可以用！输出到一半然后我截停并且强制停止也没有bug”。这是人工操作反馈，本轮未另行采集原始响应、请求头或设备日志。
+
+| 项目 | 结果 | 证据范围 |
+| --- | --- | --- |
+| 手机输入并保存 API Key、加载真实模型、选择模型、正常聊天 | PASS | 开发者对上一轮操作步骤的整体确认；未单独提供 HTTP 状态、模型数量或终态诊断 |
+| 已有文字输出后中途取消 | PASS | 开发者明确确认输出到一半截停可用；未单独提供取消状态枚举或请求计数 |
+| 取消后强行停止应用 | PASS within tested scope | 开发者确认未发现异常；尚未确认本轮强停后的重新打开、记录恢复或自动续发情况 |
+
+这一反馈支持本轮 DeepSeek REAL PROVIDER PASS。服务端 response.completed 的逐字段真机诊断、本轮新增 Keystore 自动化执行、强停重开后的 DeepSeek 记录恢复，以及实际覆盖升级迁移仍为 NOT TESTED / 未单独采集。严格终态、单次 POST 和隔离边界的细项证据继续来自本地测试，不能用人工“无异常”反馈替代所有安全验证。
+
+没有因此追加真实请求、安装操作或功能开发。分支等待评审，SIWC 兼容性仍为 CONDITIONAL。
+
+## 本轮真机操作步骤（已由开发者完成）
 
 1. 安装最终并行验证 APK，打开“Meldwise · Sprint 2”。原 Sprint 1 应用和数据留在原处。
 2. 选 DeepSeek → 配置密钥，在手机里私下输入 Key → 保存。
@@ -136,7 +150,7 @@ DeepSeek REAL PROVIDER 和本轮新界面的真机交互尚未验证。API Key �
 
 只提供脱敏状态截图/字段。Key、请求头、私人聊天、服务端原始错误和回调链接留在手机上。真实调用和 API 费用由开发者明确操作产生；没有自动余额查询。
 
-本轮提交留在 feature 分支。到此停止等待真机结果，不合并 main、不创建 Release/tag。
+本轮提交留在 feature 分支。真机结果已收到，接下来等待评审；main、Release 和 tag 保持原样。
 
 ## 验证包与提交
 
@@ -150,4 +164,4 @@ SHA-256：`585E059B740368FAAF98C14C72219D49BCF8E77B9B72439CA373FBC573A6C6EC`。
 
 选择并行验证的原因：实际比较发现当前构建账户的调试证书与 Sprint 1 APK 不同，原签名文件位于另一个受限构建账户，本轮无法访问。没有修改其权限、导出私钥或卸载旧应用。独立安装保留原数据，新的验证包从自己的空白沙箱开始；这不是覆盖升级/真实旧账号迁移的真机证据。旧记录迁移已经本地合成测试，真实覆盖升级仍待可用的原签名或统一签名方案后验证。
 
-工程分支已提交，尚未推送或创建 PR；本轮没有远端写入，也没有设备安装或真实 Provider 请求。
+工程分支已提交，尚未推送或创建 PR；代理没有进行远端写入、设备安装或真实 Provider 请求。上述真实 DeepSeek 操作由开发者本人完成。

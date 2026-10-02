@@ -4,7 +4,7 @@ Meldwise 是一个 Android 多模型协作客户端。我们希望让多个模�
 
 目前完成了 Phase 2 Sprint 1：ChatGPT 登录、本地加密存储、模型选择和单模型聊天。这一轮已经验收并合并到 main，多模型协作会在后续阶段继续做。
 
-当前 Sprint 2 分支已接入 DeepSeek：在手机里配置独立加密的 API Key，加载官方模型列表，再选择模型聊天。本地 Debug、Release 各 200 项测试和构建/lint 已通过，真实 DeepSeek 调用等开发者在手机上验证。过程见 [Sprint 2 接入记录](docs/第二阶段第二轮-DeepSeek-Provider.md)。
+当前 Sprint 2 分支已接入 DeepSeek：在手机里配置独立加密的 API Key，加载官方模型列表，再选择模型聊天。本地 Debug、Release 各 200 项测试和构建/lint 已通过。开发者已确认真实模型加载、聊天和输出中途取消可用，取消后强行停止应用也未发现异常；具体证据范围见 [Sprint 2 接入记录](docs/第二阶段第二轮-DeepSeek-Provider.md)。
 
 v0.3 规格保持冻结。SIWC 兼容性仍按 CONDITIONAL（有条件通过）记录，正式发布还需要补充长周期和更多设备上的验证。
 
@@ -90,7 +90,7 @@ Meldwise is an Android client for multi-model collaboration. Its goal is to let 
 
 Phase 2 Sprint 1 is complete and merged into main. It establishes ChatGPT authentication, encrypted local storage, model discovery, and Single Chat. Multi-model workflows remain planned work.
 
-The Sprint 2 feature branch adds DeepSeek with an independently encrypted API key, dynamic model discovery, and streaming Single Chat. Local verification passed 200 tests per Debug/Release variant, builds, and lint. Real-provider verification is pending developer testing on Android. See the [Sprint 2 report](docs/第二阶段第二轮-DeepSeek-Provider.md).
+The Sprint 2 feature branch adds DeepSeek with an independently encrypted API key, dynamic model discovery, and streaming Single Chat. Local verification passed 200 tests per Debug/Release variant, builds, and lint. Developer-observed real-device testing passed model loading, chat, and cancellation after partial output; subsequent force-stop showed no reported issue. Detailed protocol telemetry and post-force-stop restoration were not separately collected. See the [Sprint 2 report](docs/第二阶段第二轮-DeepSeek-Provider.md).
 
 The v0.3 specification remains frozen. SIWC compatibility remains CONDITIONAL; broader and longer-term validation is required before a public production release.
 
