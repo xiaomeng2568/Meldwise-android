@@ -145,10 +145,81 @@ class ModelCatalogNetworkTests {
         }
     }
     @Test fun bodyLimitIsProtocolNotNetwork()=runBlocking {
-        MockWebServer().use {server->server.start();server.enqueue(MockResponse().setBody("x".repeat(262145)))
+        MockWebServer().use {server->server.start();server.enqueue(MockResponse().setBody("x".repeat(BoundedBodyPolicy.MODEL_CATALOG_BYTES+1)))
             val p=provider(server);assertEquals(ErrorKind.PROTOCOL,failure(p).kind)
             assertEquals(CatalogProtocol.BODY_LIMIT,p.catalogDiagnostic?.protocolCategory)
             assertFalse(requireNotNull(p.catalogDiagnostic).bodyReadCompleted);assertEquals(1,server.requestCount)
+        }
+    }
+    @Test fun ordinaryResponseStillRejectsAboveConservativeLimit()=runBlocking {
+        MockWebServer().use {server->
+            server.start();server.enqueue(MockResponse().setBody("x".repeat(BoundedBodyPolicy.CONSERVATIVE_BYTES+1)))
+            val network=NetworkClient(allowLocalTestHttp=true)
+            val request=okhttp3.Request.Builder().url(server.url("/").newBuilder().host("127.0.0.1").build()).build()
+            try { network.request(request);fail("Expected conservative body limit") }
+            catch(f:NetworkFault) { assertEquals(Outcome.PROTOCOL,f.outcome);assertEquals(CatalogProtocol.BODY_LIMIT,f.protocol) }
+            assertEquals(1,server.requestCount)
+        }
+    }
+    @Test fun ordinaryResponseAcceptsExactlyConservativeLimit()=runBlocking {
+        MockWebServer().use {server->
+            server.start();server.enqueue(MockResponse().setBody("x".repeat(BoundedBodyPolicy.CONSERVATIVE_BYTES)))
+            val request=okhttp3.Request.Builder().url(server.url("/").newBuilder().host("127.0.0.1").build()).build()
+            val result=NetworkClient(allowLocalTestHttp=true).request(request,Operation.TOKEN_EXCHANGE)
+            assertEquals(BoundedBodyPolicy.CONSERVATIVE_BYTES,result.body.length);assertEquals(1,server.requestCount)
+        }
+    }
+    @Test fun extraRoomIsOnlyForSuccessfulModelCatalog() {
+        Operation.entries.forEach { operation->
+            assertEquals(BoundedBodyPolicy.CONSERVATIVE_BYTES,BoundedBodyPolicy.limit(operation,400))
+            assertEquals(BoundedBodyPolicy.CONSERVATIVE_BYTES,BoundedBodyPolicy.limit(operation,401))
+            assertEquals(if(operation==Operation.MODELS) BoundedBodyPolicy.MODEL_CATALOG_BYTES else BoundedBodyPolicy.CONSERVATIVE_BYTES,
+                BoundedBodyPolicy.limit(operation,200))
+        }
+    }
+    @Test fun catalogHttpErrorRetainsConservativeBodyLimit()=runBlocking {
+        MockWebServer().use {server->
+            server.start();server.enqueue(MockResponse().setResponseCode(429)
+                .setBody("x".repeat(BoundedBodyPolicy.CONSERVATIVE_BYTES+1)))
+            val p=provider(server);assertEquals(ErrorKind.PROTOCOL,failure(p).kind)
+            val d=requireNotNull(p.catalogDiagnostic)
+            assertEquals(429,d.httpStatus);assertEquals(CatalogProtocol.BODY_LIMIT,d.protocolCategory)
+            assertFalse(d.bodyReadCompleted || d.jsonParsed);assertSafe(d);assertEquals(1,server.requestCount)
+        }
+    }
+    private fun largeCatalog(targetBytes:Int):String {
+        // Synthetic ignored provider metadata makes the body large without exceeding entry/name limits.
+        val prefix="""{"models":[{"visibility":"list","slug":"large-synthetic","display_name":"Synthetic"}],"ignored_metadata":"$marker"""
+        val suffix="\"}"
+        require(targetBytes>=prefix.length+suffix.length)
+        return prefix+"x".repeat(targetBytes-prefix.length-suffix.length)+suffix
+    }
+    private fun readLargeCatalog(targetBytes:Int)=runBlocking {
+        MockWebServer().use {server->
+            server.start();server.enqueue(MockResponse().setBody(largeCatalog(targetBytes)))
+            val p=provider(server);val models=p.listModels();val d=requireNotNull(p.catalogDiagnostic)
+            assertEquals(listOf("large-synthetic"),models.map {it.id})
+            assertEquals(200,d.httpStatus);assertTrue(d.bodyReadCompleted && d.jsonParsed && d.modelsArrayFound)
+            assertEquals(1,d.visibleModelCount);assertEquals(1,d.parsedModelCount)
+            assertEquals(CatalogFailure.NONE,d.failureCategory);assertSafe(d);assertEquals(1,server.requestCount)
+        }
+    }
+    @Test fun validLargeCatalogReadsAboveOldLimit()=readLargeCatalog(512*1024)
+    @Test fun catalogAcceptsExactlyItsExplicitMaximum()=readLargeCatalog(BoundedBodyPolicy.MODEL_CATALOG_BYTES)
+    @Test fun malformedLargeJsonIsProtocolNotNetwork()=protocol(
+        "{\"ignored\":\"$marker"+"x".repeat(512*1024),false,false,CatalogProtocol.PROTOCOL_JSON)
+    @Test fun malformedLargeCatalogSchemaIsProtocolNotNetwork()=protocol(
+        "{\"ignored\":\"$marker"+"x".repeat(512*1024)+"\",\"models\":{}}",true,false,CatalogProtocol.PROTOCOL_MODEL_CATALOG)
+    @Test fun compressedCatalogStillEnforcesDecodedByteLimit()=runBlocking {
+        MockWebServer().use {server->
+            val encoded=java.io.ByteArrayOutputStream()
+            java.util.zip.GZIPOutputStream(encoded).use {it.write(largeCatalog(BoundedBodyPolicy.MODEL_CATALOG_BYTES+1).toByteArray())}
+            server.start();server.enqueue(MockResponse().setHeader("Content-Encoding","gzip")
+                .setBody(okio.Buffer().write(encoded.toByteArray())))
+            val p=provider(server);assertEquals(ErrorKind.PROTOCOL,failure(p).kind)
+            val d=requireNotNull(p.catalogDiagnostic)
+            assertEquals(200,d.httpStatus);assertEquals(CatalogProtocol.BODY_LIMIT,d.protocolCategory)
+            assertFalse(d.bodyReadCompleted || d.jsonParsed);assertSafe(d);assertEquals(1,server.requestCount)
         }
     }
     @Test fun cancellationDoesNotReplayOrOverwriteTerminalSnapshot()=runBlocking {

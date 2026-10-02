@@ -88,11 +88,12 @@ class NetworkClient(val diagnostics: SafeDiagnostics = SafeDiagnostics(), privat
                         catalog?.responseReceived(response.code)
                         val input = (response.body ?: throw NetworkFault(Outcome.PROTOCOL,true,
                             stage=CatalogStage.BODY_READ,protocol=CatalogProtocol.BODY_MISSING)).byteStream()
+                        val limit = BoundedBodyPolicy.limit(operation,response.code)
                         val bytes = ByteArrayOutputStream(); val block = ByteArray(4096)
                         while (true) {
                             val count = input.read(block)
                             if (count < 0) break
-                            if (bytes.size()+count > 262144) throw NetworkFault(Outcome.PROTOCOL,true,
+                            if (count > limit-bytes.size()) throw NetworkFault(Outcome.PROTOCOL,true,
                                 stage=CatalogStage.BODY_READ,protocol=CatalogProtocol.BODY_LIMIT)
                             bytes.write(block,0,count)
                         }
