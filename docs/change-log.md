@@ -67,3 +67,6 @@ Added the Chinese current-status report and updated the final acceptance matrix 
 ## 2026-10-02 — Final developer acceptance and closure preparation
 
 Recorded explicit developer PASS within tested scope for cold restart/reopen, offline behavior and encrypted/local persistence/chat restoration. Preserved the unresolved cold Activity automation limitation and all long-term NOT TESTED items. Committed the previously compiled bounded AndroidTest lifecycle synchronization and remaining integration/report changes; no product architecture/security behavior changes. Local full verification and new-HEAD CI are required for actual closure; remote promotion/merge/results are recorded in the final acceptance report after execution. No provider/model/inference request is repeated, no APK installed, no Sprint 2 or public release.
+
+- README and final acceptance summary now use Chinese/English presentation as requested. PR closure description will be bilingual. Documentation only; product sources and tested APK remain unchanged.
+- 按要求提供中英双语 README、最终验收摘要及 PR 收尾描述；仅修改文档，不更改产品源码或已验收 APK。

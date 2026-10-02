@@ -4,6 +4,12 @@ Date: 2026-10-02 (Asia/Shanghai). Developer-observed remaining real-device accep
 
 PHASE 2 SPRINT 1: CONDITIONAL
 
+## 中文摘要 / Chinese summary
+
+开发者已明确确认冷重启/重开、离线/断网、加密本地持久化及聊天状态恢复在测试范围内 PASS；正常聊天和流式取消已有真机截图证据。Debug / Release 各 104 项完整测试通过，两种构建通过、lint 均 0 错误/1 条既有警告；实际 Keystore 存储测试 4 项通过。冷启动自动测试仍未完成，不宣称 5/5 自动测试通过；人工确认不等于网络抓包/进程计数级证明。
+
+本检查点等待最终 HEAD 的两类 CI 及安全合并后核验；真实提交与 CI 记录将在收尾时补齐。Sprint 验收与 SIWC 兼容性分开判断：SIWC 始终 CONDITIONAL，长期未测试项不改写为通过，不重复服务端测试，不开始 Sprint 2 或公共发布。
+
 ## 1. Revision and artifact identity
 
 | Item | Actual value/status |
