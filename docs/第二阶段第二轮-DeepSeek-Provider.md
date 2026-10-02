@@ -108,7 +108,7 @@ Key 缺失时会话仍可查看，发送前需要本地凭据准入。恢复不�
 | SecondProviderSecurityTests | 6 |
 | 合计 | 200 |
 
-assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndroidTest 均通过。两个 lint 各 0 错误 / 1 条既有 UseKtx 警告。首次实现验证编译 6 个 AndroidTest；收尾增加一项显式 opt-in 的现有 DeepSeek 记录验收，最终共 7 个方法。收尾在真机分别执行 Keystore 与本地恢复核对各 1 项，均通过；其余方法未在本轮全量执行。
+assembleDebug、assembleRelease、lintDebug、lintRelease 和 assembleDebugAndroidTest 均通过。最终联网全量 lint 的 XML 实测为 Debug 0 errors / 22 warnings、Release 0 errors / 15 warnings；均包含 1 条既有 UseKtx，其余为依赖/AGP 新版本提示（Debug 21、Release 14）。早先实现报告仅记录 1 条警告，最终结果以这次 XML 为准，锁定版本保持原样。首次实现验证编译 6 个 AndroidTest；收尾增加一项显式 opt-in 的现有 DeepSeek 记录验收，最终共 7 个方法。收尾在真机分别执行 Keystore 与本地恢复核对各 1 项，均通过；其余方法未在本轮全量执行。
 
 10 个既有 compile/runtime 锁定依赖图全部解析成功。没有新增依赖；app/gradle.lockfile SHA-256 为 DD1A81F32D7A0E9B8DBC4CAB49EAE4AB794F07D13AD620FCF707AB456D5D76DB，settings-gradle.lockfile 为 6656E3AED66762D2F39666DE089080C66A3224078AABDF27764B041DA508DF84，均与基线一致。冻结规格 SHA-256 仍为 2F64D6C93FEF56184A4EA38B819389397C920B2D4268D888683D3033C0116A78。
 
@@ -175,7 +175,7 @@ SHA-256：`585E059B740368FAAF98C14C72219D49BCF8E77B9B72439CA373FBC573A6C6EC`。
 | LOCAL TESTED | Debug 全量单元测试 | 200 / 200，0 failures / errors / skipped；最终源码强制全量执行 |
 | LOCAL TESTED | Release 全量单元测试 | 200 / 200，0 failures / errors / skipped；包含全部 Sprint 1 回归 |
 | LOCAL TESTED | assembleDebug / assembleRelease | PASS；Release 未签名工程包，未创建发布 |
-| LOCAL TESTED | lintDebug / lintRelease | PASS；各 0 errors、1 条既有 UseKtx warning |
+| LOCAL TESTED | lintDebug / lintRelease | PASS；Debug 0 errors / 22 warnings，Release 0 errors / 15 warnings；新增可见提示为依赖/AGP 版本建议，未改锁定版本或关闭检查 |
 | LOCAL TESTED | assembleDebugAndroidTest | PASS；7 个方法编译，区别于真机执行数量 |
 | LOCAL TESTED | dependency lock consistency | 10 / 10 既有依赖图解析成功；两份 lockfile 与基线散列一致 |
 | LOCAL TESTED | 旧聊天迁移 / 严格终态 / 无回退和重放 | PASS；合成测试，范围见本地验证章节 |
