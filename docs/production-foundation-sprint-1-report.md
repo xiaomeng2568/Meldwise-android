@@ -6,7 +6,7 @@ Phase 1 决策：GO TO PRODUCTION IMPLEMENTATION；SIWC compatibility：CONDITIO
 
 ## 1. 工程隔离与环境
 
-- 新目录：D:/gerenxiangmu/Android-AI-Agent/P2-Production-Foundation。
+- 独立工作目录：P2-Production-Foundation（机器本地绝对路径不纳入版本管理）。
 - 独立本地 checkout，分支 production/foundation-sprint-1；从已提交基线 dccaab36328c60975e5515198ef680a5413039a2 建立，没有复制旧工程未提交的 spike 架构。
 - JDK 17 / Gradle 8.13 / AGP 8.9.2 / Kotlin 2.1.20；compile/target SDK 35，min SDK 26。既有 SDK 未重新安装。项目与 SDK 路径均为无空格 ASCII 路径。
 - 单 app 模块、Kotlin + Compose Material 3、手动依赖组装；无 Room/Hilt。

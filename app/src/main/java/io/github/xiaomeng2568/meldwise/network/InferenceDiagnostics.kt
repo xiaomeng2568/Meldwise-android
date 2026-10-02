@@ -22,6 +22,7 @@ data class InferenceDiagnostic internal constructor(
     val credentialAvailable:Boolean=false, val requestBuilt:Boolean=false, val requestStarted:Boolean=false,
     val httpReceived:Boolean=false, val httpStatus:Int?=null,
     val streamBodyOpened:Boolean=false, val sseParserStarted:Boolean=false,
+    val networkExchangeCount:Int=0,
     val parsedEventCount:Int=0, val firstEvent:ResponseEvent=ResponseEvent.NONE, val lastEvent:ResponseEvent=ResponseEvent.NONE,
     val createdSeen:Boolean=false, val assistantOutputItemSeen:Boolean=false,
     val textDeltaSeen:Boolean=false, val textDoneSeen:Boolean=false, val contentPartDoneSeen:Boolean=false,
@@ -36,6 +37,7 @@ data class InferenceDiagnostic internal constructor(
         "令牌可用：$credentialAvailable；请求已创建：$requestBuilt；已启动：$requestStarted",
         "收到 HTTP：$httpReceived；HTTP 状态：${httpStatus ?: "无"}",
         "流正文已打开：$streamBodyOpened；SSE 解析已启动：$sseParserStarted",
+        "本次流请求网络发送次数：$networkExchangeCount",
         "解析事件数：$parsedEventCount；首事件：$firstEvent；末事件：$lastEvent",
         "response.created：$createdSeen；助手输出项：$assistantOutputItemSeen",
         "output_text.delta：$textDeltaSeen；output_text.done：$textDoneSeen",
@@ -57,6 +59,7 @@ class InferenceTrace {
         if(!finished) value=change(value)
     }
     internal fun requestStarted()=update { it.copy(requestStarted=true) }
+    internal fun networkExchange()=update { it.copy(networkExchangeCount=(it.networkExchangeCount+1).coerceAtMost(2)) }
     internal fun event(type:String) {
         val category=when(type) {
             "response.created"->ResponseEvent.CREATED; "response.in_progress"->ResponseEvent.IN_PROGRESS

@@ -36,6 +36,7 @@ class InferenceProtocolTests {
             val p=provider(server);p.listModels()
             val events=withTimeout(10000) {p.streamResponse(LlmRequest("synthetic-model",listOf(LlmMessage(MessageRole.USER,marker)))).toList()}
             val diagnostic=requireNotNull(p.inferenceDiagnostic.value)
+            assertEquals(1,diagnostic.networkExchangeCount)
             verify(events,diagnostic)
             assertEquals(2,server.requestCount)
             assertEquals("GET",server.takeRequest().method)

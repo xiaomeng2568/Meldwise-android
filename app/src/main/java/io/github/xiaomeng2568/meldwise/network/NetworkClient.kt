@@ -22,6 +22,8 @@ class RequestRisk {
     val exchanges = java.util.concurrent.atomic.AtomicInteger(0)
 }
 class NetworkClient(val diagnostics: SafeDiagnostics = SafeDiagnostics(), private val allowLocalTestHttp: Boolean = false) {
+    private val callStarts=java.util.concurrent.atomic.AtomicInteger(0)
+    internal val startedCallCount:Int get()=callStarts.get()
     val client = OkHttpClient.Builder()
         .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
         .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
@@ -31,11 +33,13 @@ class NetworkClient(val diagnostics: SafeDiagnostics = SafeDiagnostics(), privat
             // OkHttp can otherwise follow up a 503 Retry-After: 0 even with connection retries off.
             val risk=requireNotNull(chain.request().tag(RequestRisk::class.java))
             if(risk.exchanges.incrementAndGet()>1) throw IOException("AUTOMATIC_REPLAY_BLOCKED")
+            chain.request().tag(InferenceTrace::class.java)?.networkExchange()
             val response=chain.proceed(chain.request())
             if(response.code==503) response.newBuilder().header("Retry-After","2147483647").build() else response
         }
         .eventListenerFactory { call -> object : EventListener() {
             override fun callStart(call: Call) {
+                callStarts.updateAndGet { if(it==Int.MAX_VALUE) it else it+1 }
                 call.request().tag(ModelCatalogTrace::class.java)?.requestStarted()
                 call.request().tag(InferenceTrace::class.java)?.requestStarted()
             }

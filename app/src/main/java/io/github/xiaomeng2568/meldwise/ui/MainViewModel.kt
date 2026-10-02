@@ -18,6 +18,8 @@ class ScreenState(val models:List<LlmModel> = emptyList(),val selected:String?=n
 class MainViewModel(private val container:AppContainer):ViewModel() {
     val auth=container.tokens.state
     val inferenceDiagnostic=container.provider.inferenceDiagnostic
+    private val localRestoreFinished=MutableStateFlow(false)
+    internal val localRestorationFinished:StateFlow<Boolean> = localRestoreFinished.asStateFlow()
     private val mutable=MutableStateFlow(ScreenState())
     val screen:StateFlow<ScreenState> = mutable
     private var chatJob:Job?=null
@@ -27,6 +29,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         runCatching { container.tokens.initialize() }
         try { val messages=withContext(Dispatchers.IO) { container.chat.load() }; replace(messages=messages) }
         catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
+        finally { localRestoreFinished.value=true }
     } }
     private fun replace(models:List<LlmModel> = screen.value.models,selected:String?=screen.value.selected,
         messages:List<ChatMessage> = screen.value.messages,busy:Boolean=screen.value.busy,error:String?=null,
