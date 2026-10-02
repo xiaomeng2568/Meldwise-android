@@ -1,163 +1,38 @@
-# Meldwise for Android
+# Meldwise — Production Foundation Sprint 1
 
-**中文 | English**
+Phase 2 starts on production/foundation-sprint-1 in a separate checkout. v0.3 remains frozen. This is a foundation validation build, **not a production-ready release**. Phase 1 feasibility is GO; SIWC compatibility remains CONDITIONAL.
 
-Meldwise 是一个 **Local-first、面向 Android 的多模型协作客户端**。
+## Scope
 
-它的目标不是做“又一个多 Provider 聊天壳”，而是让不同 AI 模型围绕同一个问题进行独立作答、对照、协作、互审与综合。
+- Fresh single-module Kotlin / Compose application, manual dependency wiring; no spike classes, Room or Hilt.
+- OAuth authorization code + S256 PKCE + installation host identity; trusted discovery and RS256 ID-token validation with bounded JWKS refresh.
+- TokenManager with single-process refresh single-flight, scope checks and ReauthRequired.
+- Android Keystore AES-256-GCM, encrypted atomic session persistence, pre-refresh crash marker and quarantine of uncertain rotation.
+- Provider domain and ChatGPT Plan adapter, OkHttp, bounded SSE parser, cancellation, deadlines and closed-schema memory-only diagnostics.
+- Minimal connection/status/model selector/Single chat. Model catalog loading and sending are explicit actions. No model, billing or API-key fallback.
+- Encrypted local chat journal; partial responses survive interruption as Incomplete, never automatically replayed.
 
-Meldwise is a **local-first Android client for resilient multi-model collaboration**.
+The adapter currently supports the verified text/stream baseline only. No collaboration, Debate, tools, image input, multi-account switching or production remote-logout screen is included.
 
-Its goal is not to become just another multi-provider chat shell, but to let different AI models independently answer, compare, review, collaborate, and synthesize around the same task.
+## Build
 
----
+JDK 17, Android SDK 35, Gradle 8.13. Paths for SDK/project must be ASCII and space-free. Set your own ignored local.properties SDK path, then run ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug.
 
-## 中文
+Dependencies resolve through Google and Maven Central. No API key, client secret or account information belongs in build configuration. No provider request occurs merely by building or opening the app. Real authorization and model requests require explicit user actions.
 
-### 项目定位
+## Privacy and recovery
 
-Meldwise 的核心是 **Multi-Model Collaboration Harness（多模型协作编排层）**。
+Conversations and credentials are encrypted locally in backup-excluded app storage. Sending a message transmits its content to OpenAI under OpenAI's policies; local-first does not mean local-only. Clear app data / uninstall removes local connection state and creates a new installation identity on subsequent connection.
 
-计划中的核心模式：
+An interrupted refresh cannot prove whether the provider rotated its token. The old credential remains encrypted in a quarantined record and is not replayed; reauthorization is required. A complete replacement is published only after atomic write and readback. Disconnect locally clears usable credentials but does **not** revoke the remote renewable session or delete the provider client.
 
-- **Single**：单模型正常对话
-- **Compare**：多个模型并行回答
-- **Collaborate**：多个候选答案交由 Judge 综合
-- **Debate**：模型互审后再综合最终答案
+Keystore hardware backing and actual on-device crash/backup behavior require device validation. Plaintext values exist temporarily in JVM memory; there is no claim of guaranteed heap zeroization. Do not export browser/callback URLs, token values, response bodies or account identity in bug reports.
 
-### 当前状态
+## Reports
 
-- **Specification:** v0.3 **FROZEN**
-- **Current stage:** Gate 0 → Gate 1A → Gate 1B
-- **Platform:** Android
-- **Language:** Kotlin
-- **UI:** Jetpack Compose
-- **License:** MPL-2.0
+- [Phase 1 feasibility decision](docs/phase-1-feasibility-decision.md)
+- [Sprint 1 delivery and verification](docs/production-foundation-sprint-1-report.md)
+- [Security and crash-window behavior](docs/security-and-recovery.md)
+- [Explicit real-device acceptance plan](docs/production-device-validation.md)
 
-> 在拿到 Gate 1 的真实设备证据之前，不编写 v0.4。
-
-当前优先级不是漂亮 UI，也不是完整 OAuth 架构，而是验证高风险技术前提：
-
-1. Android 原生开源/本地客户端使用当前 ChatGPT Plan / SIWC 流程的支持边界；
-2. Android 真机上的 `127.0.0.1:<random-port>` loopback callback 是否可靠；
-3. 浏览器切换、后台、取消、重复回调、端口冲突等真实场景是否可以稳定处理；
-4. 是否存在足以阻止后续 SIWC Gate 的技术或合规问题。
-
-### 设计原则
-
-- **Local-first**
-- **Provider-agnostic**
-- **Resilience-first**
-- 不静默切换模型
-- 不静默切换计费路径
-- 不隐藏跨 Provider 数据流向
-- 不把部分失败伪装成成功
-- 先拿真实证据，再做生产架构
-
-### 隐私说明
-
-“Local-first”指的是会话历史和应用状态优先保存在设备本地，**不代表请求内容不会发送给模型服务商**。
-
-当用户调用 OpenAI、DeepSeek 或其他 Provider 时，相应内容会发送给所选服务商，并受各服务商自己的隐私政策与服务条款约束。
-
-在 Collaborate / Debate 模式中，一个 Provider 的输出也可能被发送给另一个 Provider 作为 Reviewer 或 Judge。
-
-### 开发纪律
-
-v0.3 已冻结。
-
-下一份有意义的项目文档应该是 **Gate 1 真机证据报告**，而不是继续扩展纸面规格。
-
-Phase 1 中的 SIWC 代码属于 **disposable spike**：
-
-- 不实现生产级 `OAuthManager`
-- 不引入 Room
-- 不引入复杂 DI / Hilt 架构
-- 不制作正式 UI
-- Spike 只负责回答可行性问题
-- Spike 成功后，生产实现重新设计/重写，不持续给实验代码打补丁
-
----
-
-## English
-
-### Project Positioning
-
-Meldwise is a **Multi-Model Collaboration Harness** for Android.
-
-Planned core modes:
-
-- **Single** — standard single-model conversation
-- **Compare** — multiple models answer in parallel
-- **Collaborate** — multiple candidate answers are synthesized by a Judge
-- **Debate** — models cross-review each other before final synthesis
-
-### Current Status
-
-- **Specification:** v0.3 **FROZEN**
-- **Current stage:** Gate 0 → Gate 1A → Gate 1B
-- **Platform:** Android
-- **Language:** Kotlin
-- **UI:** Jetpack Compose
-- **License:** MPL-2.0
-
-> No v0.4 will be written before real Gate 1 device evidence exists.
-
-The current priority is not polished UI or production OAuth architecture. It is to validate the highest-risk assumptions:
-
-1. Whether the current ChatGPT Plan / SIWC flow is acceptable for a native Android open-source/local client;
-2. Whether `127.0.0.1:<random-port>` loopback callbacks work reliably on real Android devices;
-3. Whether browser switching, backgrounding, cancellation, duplicate callbacks, and port collisions behave acceptably;
-4. Whether any technical or compliance issue is serious enough to block later SIWC gates.
-
-### Principles
-
-- **Local-first**
-- **Provider-agnostic**
-- **Resilience-first**
-- No silent model fallback
-- No silent billing-path changes
-- No hidden cross-provider data flow
-- No presenting partial failure as success
-- Evidence before production architecture
-
-### Privacy
-
-“Local-first” means that conversation history and application state are primarily stored on the user's device. It **does not** mean that prompts never leave the device.
-
-When the user invokes OpenAI, DeepSeek, or another provider, the relevant content is transmitted to that provider and processed under its own privacy policy and terms.
-
-In Collaborate / Debate modes, output from one provider may also be sent to another provider acting as a Reviewer or Judge.
-
-### Development Discipline
-
-v0.3 is frozen.
-
-The next meaningful project document should be a **Gate 1 real-device evidence report**, not another speculative specification revision.
-
-SIWC work during Phase 1 is a **disposable spike**:
-
-- no production `OAuthManager`
-- no Room
-- no heavy DI / Hilt architecture
-- no polished production UI
-- the spike exists only to answer feasibility questions
-- if the spike succeeds, production authentication code should be redesigned/reimplemented rather than patched indefinitely
-
----
-
-## License
-
-Meldwise source code is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
-
-See [LICENSE](./LICENSE).
-
-## Disclaimer
-
-Meldwise is an unofficial open-source project.
-
-It is not affiliated with, endorsed by, or sponsored by OpenAI, DeepSeek, or any other model provider.
-
-OpenAI and ChatGPT are trademarks of OpenAI. Other product and company names may be trademarks of their respective owners.
-
-Users are responsible for complying with the applicable terms of each provider they connect.
+Meldwise is unofficial and is not affiliated with, endorsed by, or sponsored by OpenAI. Users must comply with provider terms. Source: [MPL-2.0](LICENSE).
