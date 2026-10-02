@@ -4,15 +4,15 @@
 
 Meldwise 是非官方 Android 多模型协作客户端。本仓库当前交付 Phase 2 Sprint 1 的生产基础：先验证可靠的 ChatGPT 套餐登录与单模型聊天；尚未实现多模型协作功能。v0.3 规格保持冻结。Phase 1 可行性结论为 GO，**SIWC 兼容性仍为 CONDITIONAL，不是公共生产发布或无条件生产就绪**。最新验收、提交与 CI 状态见[最终验收报告](docs/phase-2-sprint-1-final-acceptance.md)。
 
-### 已实现范围
+### 已实现：
 
-- 独立 Kotlin / Compose 单模块工程，手工依赖组装；不复制实验架构，不使用 Room / Hilt。
+- 独立 Kotlin / Compose 单模块工程，手工依赖组装；未复制实验架构和使用 Room / Hilt。
 - OAuth 授权码 + S256 PKCE、安装级 host identity、可信发现及 RS256 ID Token 校验，有界 JWKS 刷新。
 - TokenManager 单进程刷新 single-flight、scope 检查及 ReauthRequired。
 - Android Keystore + AES-256-GCM、加密原子会话持久化、刷新前崩溃标记、隔离轮换不确定状态。
 - Provider 领域基础、ChatGPT 套餐适配器、OkHttp、有界 SSE、取消、超时和固定结构的内存脱敏诊断。
-- 中文最小界面：连接状态、显式加载/选择模型、单模型流式聊天。不自动切换模型、API 密钥或计费路径。
-- 加密本地聊天记录；中断后的未完成状态如实恢复，不自动续传或重放。
+- 中文最小界面：连接状态、显式加载/选择模型、单模型流式聊天。
+- 加密本地聊天记录；中断后的未完成状态如实恢复，未续传或重放。
 
 仅支持已验证的文本流式基础能力；不包含协作/辩论、工具调用、图片输入、多账号切换或正式远程退出界面。
 
