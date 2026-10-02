@@ -27,6 +27,8 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
     @Volatile private var models:List<LlmModel> = emptyList()
     @Volatile var catalogDiagnostic:ModelCatalogDiagnostic? = null
         private set
+    private val mutableInference=MutableStateFlow<InferenceDiagnostic?>(null)
+    val inferenceDiagnostic:StateFlow<InferenceDiagnostic?> = mutableInference.asStateFlow()
     override suspend fun validateConnection():ProviderStatus = when(val state=tokens.state.value) {
         is AuthState.Connected->if(state.planEnabled) ProviderStatus.READY else ProviderStatus.IDENTITY_ONLY
         is AuthState.ReauthRequired->ProviderStatus.REAUTH_REQUIRED
@@ -147,34 +149,61 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
     }
     override fun streamResponse(request:LlmRequest):Flow<LlmEvent> = callbackFlow {
         val call=java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>()
-        val reader=ResponsesReader()
+        val trace=InferenceTrace()
+        val reader=ResponsesReader(trace)
+        mutableInference.value=null
+        var stage=InferenceStage.REQUEST_BUILD
         val job=launch(Dispatchers.IO) {
             try {
                 if(models.none { it.id==request.model }) throw ProviderFailure(LlmError(ErrorKind.MODEL_UNAVAILABLE))
                 val body=try { payload(request) } catch(_:Exception) { throw ProviderFailure(LlmError(ErrorKind.UNSUPPORTED_CAPABILITY)) }
+                stage=InferenceStage.CREDENTIAL
                 val token=tokens.accessToken()
+                trace.update { it.copy(credentialAvailable=true) }
+                stage=InferenceStage.REQUEST_BUILD
                 val created=network.newCall(Request.Builder().url("$base/responses")
                     .header("Authorization","Bearer ${token.value}").header("Accept","text/event-stream")
+                    .tag(InferenceTrace::class.java,trace)
                     .post(body.toRequestBody("application/json".toMediaType())).build(),streaming=true)
+                trace.update { it.copy(requestBuilt=true) }
+                stage=InferenceStage.HTTP
                 call.set(created); currentCoroutineContext().ensureActive()
                 created.execute().use { response ->
+                    trace.update { it.copy(httpReceived=true,httpStatus=response.code) }
                     network.diagnostics.record(Operation.RESPONSE,Outcome.HTTP,response.code)
                     if(response.code!=200) {
-                        val peek=response.peekBody(8192).string()
-                        val code=runCatching { Json.parseToJsonElement(peek).jsonObject["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content }.getOrNull()
-                        val error=ProviderErrors.map(response.code,code)
-                        if(error.requiresReauth) tokens.requireReauth(if(code=="insufficient_scope") AuthReason.SCOPE_CHANGED else AuthReason.TOKEN_REJECTED)
+                        // Preserve HTTP admission failures even if reading the bounded error prefix fails.
+                        val admission=try { inspectAdmission(response.code,response.peekBody(8192).string()) }
+                            catch(_:java.io.IOException) { ProviderAdmission(ProviderBodyShape.NONE,ProviderCode.NONE,ProviderErrors.map(response.code,null),false) }
+                        trace.update { it.copy(providerBodyShape=admission.shape,providerCode=admission.code) }
+                        val error=admission.error
+                        trace.finish(InferenceStage.HTTP,result=error.kind)
+                        if(error.requiresReauth) tokens.requireReauth(if(admission.scopeChanged) AuthReason.SCOPE_CHANGED else AuthReason.TOKEN_REJECTED)
                         throw ProviderFailure(error)
                     }
+                    stage=InferenceStage.STREAM_OPEN
                     val sse=SseParser(requireNotNull(response.body).source())
+                    trace.update { it.copy(streamBodyOpened=true,sseParserStarted=true) }
                     while(!reader.terminal) {
                         currentCoroutineContext().ensureActive()
-                        val frame=sse.next() ?: break
-                        reader.consume(frame).forEach { send(it) }
+                        stage=InferenceStage.SSE_FRAME
+                        val frame=try { sse.next() } catch(failure:java.io.IOException) { throw failure }
+                            catch(_:Exception) { throw ResponseProtocolFailure(InferenceStage.SSE_FRAME,InferenceProtocol.SSE_INVALID) }
+                        if(frame==null) break
+                        val events=reader.consume(frame)
+                        if(reader.terminal) mutableInference.value=trace.snapshot()
+                        events.forEach { send(it) }
                     }
-                    if(!reader.terminal) send(LlmEvent.Incomplete(LlmError(ErrorKind.STREAM_INTERRUPTED,isRetryable=true,mayHaveProducedOutput=reader.produced)))
+                    if(!reader.terminal) {
+                        trace.finish(InferenceStage.EOF_BEFORE_TERMINAL,result=ErrorKind.STREAM_INTERRUPTED)
+                        mutableInference.value=trace.snapshot()
+                        send(LlmEvent.Incomplete(LlmError(ErrorKind.STREAM_INTERRUPTED,isRetryable=true,mayHaveProducedOutput=reader.produced)))
+                    }
                 }
-            } catch(cancel:CancellationException) { throw cancel }
+            } catch(cancel:CancellationException) {
+                trace.finish(InferenceStage.CANCELLED,result=ErrorKind.CANCELLED,transport=TransportCategory.CANCELLED)
+                throw cancel
+            }
             catch(failure:Exception) {
                 if(isActive) {
                     val error=when(failure) {
@@ -184,12 +213,24 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
                         is java.io.IOException->LlmError(ErrorKind.NETWORK,isRetryable=true,mayHaveProducedOutput=reader.produced)
                         else->LlmError(ErrorKind.PROTOCOL,mayHaveProducedOutput=reader.produced)
                     }
-                    network.diagnostics.record(Operation.RESPONSE,Outcome.PROTOCOL)
+                    val transport=if(failure is java.io.IOException) transportCategory(failure) else TransportCategory.NONE
+                    if(failure is ResponseProtocolFailure) trace.finish(failure.stage,failure.protocol,error.kind)
+                    else trace.finish(stage,result=error.kind,transport=transport)
+                    mutableInference.value=trace.snapshot()
+                    if(!(failure is ProviderFailure && trace.snapshot().httpReceived && trace.snapshot().httpStatus!=200))
+                        network.diagnostics.record(Operation.RESPONSE,when(error.kind) {
+                        ErrorKind.NETWORK->Outcome.NETWORK;ErrorKind.TIMEOUT->Outcome.TIMEOUT
+                        else->Outcome.PROTOCOL
+                    })
                     send(if(reader.produced) LlmEvent.Incomplete(error) else LlmEvent.Failed(error))
                 }
-            } finally { close() }
+            } finally { mutableInference.value=trace.snapshot();close() }
         }
-        awaitClose { call.get()?.cancel(); job.cancel() }
+        awaitClose {
+            trace.finish(InferenceStage.CANCELLED,result=ErrorKind.CANCELLED,transport=TransportCategory.CANCELLED)
+            mutableInference.value=trace.snapshot()
+            call.get()?.cancel(); job.cancel()
+        }
     }
     private fun authError(failure:AuthFailure)=LlmError(if(failure.reason==AuthReason.SCOPE_CHANGED) ErrorKind.AUTHORIZATION else ErrorKind.AUTHENTICATION,
         requiresReauth=failure.reason!=AuthReason.SCOPE_CHANGED)

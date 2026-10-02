@@ -32,6 +32,7 @@ class MainActivity:ComponentActivity() {
             MaterialTheme {
                 val screen by viewModel.screen.collectAsStateWithLifecycle()
                 val auth by viewModel.auth.collectAsStateWithLifecycle()
+                val inference by viewModel.inferenceDiagnostic.collectAsStateWithLifecycle()
                 var input by remember { mutableStateOf("") }
                 var expanded by remember { mutableStateOf(false) }
                 val ready=auth is AuthState.Connected && (auth as AuthState.Connected).planEnabled
@@ -64,6 +65,9 @@ class MainActivity:ComponentActivity() {
                         }
                         screen.error?.let { Text(errorLabel(it),color=MaterialTheme.colorScheme.error) }
                         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            inference?.let { diagnostic ->
+                                item(key="inference-diagnostic") { Text(diagnostic.summary(),style=MaterialTheme.typography.bodySmall) }
+                            }
                             screen.catalogDiagnostic?.let { diagnostic ->
                                 item(key="model-catalog-diagnostic") { Text(diagnostic.summary(),style=MaterialTheme.typography.bodySmall) }
                             }

@@ -108,7 +108,7 @@ REAL DEVICE / REAL PROVIDER：用户返回“可以加载模型，模型可以�
 
 MODEL CATALOG：**PASS within tested scope**。首轮真实根因为本机 BODY_LIMIT；修正版真实重测收到 HTTP 200，正文/JSON/models 均完成，5 个可见模型全部解析，故障类别均 NONE。正文预算修正已通过本次真实目录验收。
 
-没有硬编码模型来绕过发现，没有关闭证书/主机名校验，没有新增 API-key 路径或自动重试。只宣称本次模型目录真机 PASS，不宣称完整 Sprint 1 PASS 或 SIWC 生产就绪。聊天 PROTOCOL 问题保持未解决，需单独评审/授权排查；后续集成由人工决定。
+没有硬编码模型来绕过发现，没有关闭证书/主机名校验，没有新增 API-key 路径或自动重试。只宣称本次模型目录真机 PASS，不宣称完整 Sprint 1 PASS 或 SIWC 生产就绪。当时另报的聊天 PROTOCOL 问题已在后续独立推理排查中收到开发者真机成功证据；见 [推理链路报告](inference-protocol-diagnostic.md)。不将后续推理成功归功于目录正文预算修复；后续集成由人工决定。
 
 ## 7. 最小正文策略修正 / Operation-specific body policy
 
@@ -135,8 +135,8 @@ MODEL CATALOG：**PASS within tested scope**。首轮真实根因为本机 BODY_
 
 ### 更新说明（中文）
 
-修复模型目录超过 256 KiB 时被本机读取上限阻塞的问题：仅成功的模型目录响应允许最多 2 MiB，其余普通/错误响应维持 256 KiB。保留 BODY_LIMIT、安全校验、有限 SSE 解析和脱敏诊断；加入大小边界与大目录回归测试。Debug/Release 各 77 项测试通过，构建和静态检查通过；真机 HTTP 200、5/5 模型解析成功，MODEL CATALOG PASS。聊天协议错误仍待单独排查，不宣称完整 Sprint 1 或生产就绪。
+修复模型目录超过 256 KiB 时被本机读取上限阻塞的问题：仅成功的模型目录响应允许最多 2 MiB，其余普通/错误响应维持 256 KiB。保留 BODY_LIMIT、安全校验、有限 SSE 解析和脱敏诊断；加入大小边界与大目录回归测试。此目录更新的 Debug/Release 各 77 项测试通过，构建和静态检查通过；真机 HTTP 200、5/5 模型解析成功，MODEL CATALOG PASS。聊天协议问题的后续独立真机成功证据见推理链路报告，不宣称完整 Sprint 1 或生产就绪。
 
 ### Update summary (English)
 
-Fix the client-side body limit blocking SIWC model discovery: only successful model-catalog responses may read up to 2 MiB; ordinary and error responses retain the 256 KiB limit. BODY_LIMIT failures, TLS validation, bounded SSE parsing and sanitized diagnostics remain intact. Add large-catalog and boundary regression tests. Debug and Release each pass 77 tests; build and lint pass. The real-device rerun receives HTTP 200 and parses all five visible models: MODEL CATALOG PASS. The separately reported chat protocol error remains unresolved; this is not full Sprint 1 acceptance or a production-readiness claim.
+Fix the client-side body limit blocking SIWC model discovery: only successful model-catalog responses may read up to 2 MiB; ordinary and error responses retain the 256 KiB limit. BODY_LIMIT failures, TLS validation, bounded SSE parsing and sanitized diagnostics remain intact. Add large-catalog and boundary regression tests. This catalog update passes 77 tests in each variant, build and lint. The real-device rerun receives HTTP 200 and parses all five visible models: MODEL CATALOG PASS. Subsequent independent inference success is documented in the inference protocol report; it is not attributed to the catalog body-policy fix. This is not full Sprint 1 acceptance or a production-readiness claim.

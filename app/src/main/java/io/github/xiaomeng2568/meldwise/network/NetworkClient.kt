@@ -35,7 +35,10 @@ class NetworkClient(val diagnostics: SafeDiagnostics = SafeDiagnostics(), privat
             if(response.code==503) response.newBuilder().header("Retry-After","2147483647").build() else response
         }
         .eventListenerFactory { call -> object : EventListener() {
-            override fun callStart(call: Call) { call.request().tag(ModelCatalogTrace::class.java)?.requestStarted() }
+            override fun callStart(call: Call) {
+                call.request().tag(ModelCatalogTrace::class.java)?.requestStarted()
+                call.request().tag(InferenceTrace::class.java)?.requestStarted()
+            }
             override fun dnsStart(call: Call, domainName: String) {
                 call.request().tag(ModelCatalogTrace::class.java)?.at(CatalogStage.DNS)
             }

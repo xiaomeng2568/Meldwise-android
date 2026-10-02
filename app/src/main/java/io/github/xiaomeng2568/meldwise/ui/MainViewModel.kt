@@ -17,6 +17,7 @@ class ScreenState(val models:List<LlmModel> = emptyList(),val selected:String?=n
 }
 class MainViewModel(private val container:AppContainer):ViewModel() {
     val auth=container.tokens.state
+    val inferenceDiagnostic=container.provider.inferenceDiagnostic
     private val mutable=MutableStateFlow(ScreenState())
     val screen:StateFlow<ScreenState> = mutable
     private var chatJob:Job?=null
