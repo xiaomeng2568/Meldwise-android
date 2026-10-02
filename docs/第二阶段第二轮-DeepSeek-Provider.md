@@ -207,3 +207,60 @@ am instrument -w -r -e existingDeepSeekAcceptance true -e class io.github.xiaome
 ### GitHub 交付判定
 
 验收代码和报告统一提交到 feature/p2-sprint2-deepseek-provider，正常 push，PR 指向 main。Draft 转 Ready 的条件是最新分支 HEAD 的 push 与 pull_request CI 均 SUCCESS，且没有合并阻塞；具体结果以 PR 最新描述中的链接和 SHA 核对。STOP BEFORE MERGE：本轮仅交付待合并 PR。
+
+## Sprint 2 最终收尾
+
+2026-10-02（Asia/Shanghai），开发者批准合并后，这轮已完成收尾。下面记录实际合并和验证结果；前面的“STOP BEFORE MERGE”是上一阶段交付时的边界，本节是后续获准合并后的状态。
+
+PHASE 2 SPRINT 2: ACCEPTED
+
+DEEPSEEK REAL PROVIDER: PASS within tested scope
+
+SIWC COMPATIBILITY: CONDITIONAL
+
+### 合并与 CI
+
+| 项目 | 实际结果 |
+| --- | --- |
+| 合并 PR | [#2 — Phase 2 Sprint 2 — DeepSeek Provider](https://github.com/xiaomeng2568/Meldwise-android/pull/2)，closed / merged |
+| 最终 feature HEAD | `0c056a46ef3a9781e9957e938c666ecb9c575731`，合并前与已评审 SHA 一致 |
+| 合并方式 | squash，提交标题 `feat(phase2): add DeepSeek provider foundation` |
+| squash / main 提交 | `0868f9fb888333d370ac770156d88de209a0f337` |
+| 合并后的代码树 | `274f169d086d9685655633763c1b852659cb8321`，与 feature HEAD 完全一致 |
+| feature push CI | [SUCCESS · 37023710486](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37023710486)，精确对应最终 feature HEAD |
+| pull_request CI | [SUCCESS · 37024074938](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37024074938)，精确对应最终 feature HEAD |
+| main squash CI | [SUCCESS · 37025831029](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/37025831029)，精确对应 squash 提交 |
+| 远端分支清理 | main squash CI 成功后，已删除 `feature/p2-sprint2-deepseek-provider`；删除前再次核对其 SHA，保留本地审计分支、工作树和产物 |
+
+合并前做了范围有限的复核：21 个变更文件、5 个本轮提交，确认动态凭据使用、闭合诊断、精确 Provider / model 身份、确定性迁移和既有无重放边界。当前树和新增历史未发现实际密钥、私钥、本机绝对路径或误提交产物；测试使用明确的合成夹具。ChatGPT OAuth / TokenManager、NetworkClient、安全配置和依赖锁与合并前基线保持一致。该复核未发现合并阻塞项，范围有限，不等同于独立安全审计。
+
+这份收尾记录作为单独的文档提交补到 main；生产代码保持 squash 后的版本。文档提交的 SHA 和额外 main CI 链接会同步到 PR 收尾说明，方便核对最新 main。
+
+### 保留的验收结果
+
+- LOCAL TESTED：Debug 200/200、Release 200/200，0 failures / errors / skipped；Debug / Release 构建、lint、AndroidTest 编译和 10 个依赖图检查通过。
+- lint 的最终本地计数为 Debug 0 errors / 22 warnings，Release 0 errors / 15 warnings，详见前面的验收矩阵。
+- REAL DEVICE TESTED：DeepSeek Keystore 加密密钥测试和现有加密状态/会话恢复核对，定向执行 2/2 通过；7 个 AndroidTest 方法编译通过，执行数量另算。
+- REAL DEVICE TESTED：真实 DeepSeek 模型目录、聊天、输出中途取消由开发者评审接受；恢复核对保留 configured 状态、会话、providerId/modelId，恢复阶段网络调用数为 0。
+- 正常重开采用系统启动记录、开发者观察和独立本地恢复测试。收尾没有重复服务商调用或 OEM Activity 冷启动自动化。
+
+### 继续保留的限制
+
+| 项目 | 状态 |
+| --- | --- |
+| 真实 Sprint 1 → Sprint 2 覆盖升级 | NOT TESTED；debug 签名不匹配，旧签名材料和访问权限保持原样 |
+| 完整 Activity 冷启动自动化 | INCONCLUSIVE；已接受为非阻塞限制，排除在常规 Sprint 合并门禁之外 |
+| 全套真机 AndroidTest | NOT TESTED；本轮采用上述两项定向执行 |
+| 更广的设备覆盖 | NOT TESTED |
+| 长期自然到期 | NOT TESTED |
+| 真实 refresh rotation 期间网络中断 | NOT TESTED |
+| 跨进程 refresh 协调 | NOT TESTED |
+| 独立外部安全审计 | NOT TESTED |
+
+收尾完成后停在 Sprint 2。Release、tag 和下一阶段功能留给后续人工决定；本报告的 ACCEPTED 指这一轮实现与已测试范围的验收，公开生产发布准备情况仍需后续评估。
+
+### English closure
+
+PR #2 was squash-merged at `0868f9fb888333d370ac770156d88de209a0f337` after exact-head push and pull-request CI succeeded. The merged tree matches reviewed head `0c056a46ef3a9781e9957e938c666ecb9c575731`. Main CI succeeded, and the merged remote feature branch was deleted while local audit data was retained.
+
+PHASE 2 SPRINT 2: ACCEPTED. DEEPSEEK REAL PROVIDER: PASS within tested scope. SIWC COMPATIBILITY: CONDITIONAL. The documented untested items remain open; OEM Activity cold-start automation is inconclusive and excluded from the routine merge gate. No provider tests or feature work were repeated during closure. Public production readiness is not claimed.
