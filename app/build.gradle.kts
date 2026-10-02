@@ -5,6 +5,14 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 dependencyLocking { lockAllConfigurations() }
+// Optional local signing. CI without these user-level properties builds unsigned Release APKs.
+val releaseSigningInputs = listOf(
+    "MELDWISE_RELEASE_STORE_FILE",
+    "MELDWISE_RELEASE_STORE_PASSWORD",
+    "MELDWISE_RELEASE_KEY_ALIAS",
+    "MELDWISE_RELEASE_KEY_PASSWORD",
+).associateWith { providers.gradleProperty(it) }
+val hasReleaseSigning = releaseSigningInputs.values.all { it.isPresent && it.get().isNotBlank() }
 android {
     namespace = "io.github.xiaomeng2568.meldwise"
     compileSdk = 35
@@ -12,22 +20,36 @@ android {
         applicationId = "io.github.xiaomeng2568.meldwise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 200
-        versionName = "0.3-p2-sprint2-deepseek"
+        versionCode = 204
+        versionName = "0.1.0-alpha.1"
         manifestPlaceholders["appLabel"] = "Meldwise"
+        resValue("string", "public_alpha_version", "0.1.0 Alpha")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("meldwiseRelease") {
+                storeFile = file(releaseSigningInputs.getValue("MELDWISE_RELEASE_STORE_FILE").get())
+                storePassword = releaseSigningInputs.getValue("MELDWISE_RELEASE_STORE_PASSWORD").get()
+                keyAlias = releaseSigningInputs.getValue("MELDWISE_RELEASE_KEY_ALIAS").get()
+                keyPassword = releaseSigningInputs.getValue("MELDWISE_RELEASE_KEY_PASSWORD").get()
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             // Separate engineering installation preserves the accepted Sprint 1 app/data.
             applicationIdSuffix = ".sprint2"
-            resValue("string", "sprint2_app_name", "Meldwise · Sprint 2")
+            resValue("string", "sprint2_app_name", "Meldwise · UI Preview")
             manifestPlaceholders["appLabel"] = "@string/sprint2_app_name"
         }
-        getByName("release") { isMinifyEnabled = false }
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("meldwiseRelease")
+        }
     }
     testOptions { unitTests.all { it.systemProperty("projectRoot", rootDir.absolutePath) } }
 }

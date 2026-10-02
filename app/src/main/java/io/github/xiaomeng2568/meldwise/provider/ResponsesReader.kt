@@ -9,7 +9,8 @@ internal class ResponseProtocolFailure(val stage:InferenceStage,val protocol:Inf
 class ResponsesReader(private val trace:InferenceTrace=InferenceTrace(),
     private val errorMapper:(Int,String?,Boolean)->LlmError=ProviderErrors::map,
     private val explicitIncomplete:Boolean=false,
-    private val codeCategory:(String?)->ProviderCode=::providerCode) {
+    private val codeCategory:(String?)->ProviderCode=::providerCode,
+    private val reasoningReader:ReasoningReader=ReasoningReader(ReasoningReadMode.None)) {
     private val assistants=mutableSetOf<Int>()
     private val items=mutableMapOf<Int,String>()
     private val text=mutableMapOf<Pair<Int,Int>,StringBuilder>()
@@ -86,7 +87,8 @@ class ResponsesReader(private val trace:InferenceTrace=InferenceTrace(),
             if(obj["item_id"]==null) return null
             return string(obj,"item_id") ?: fail(InferenceProtocol.ITEM_ID_MISSING)
         }
-        return when(type) {
+        val reasoningEvents=reasoningReader.consume(type,obj)
+        return reasoningEvents + when(type) {
             "response.created","response.in_progress","response.content_part.added"->emptyList()
             "response.content_part.done"->{
                 val part=obj["part"] as? JsonObject ?: fail(InferenceProtocol.UNKNOWN_EVENT_STRUCTURE)

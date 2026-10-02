@@ -18,7 +18,8 @@ class LlmMessage(val role: MessageRole, val text: String) {
 }
 class LlmRequest(val model: String, val messages: List<LlmMessage>, val instructions: String? = null,
     val temperature: Double? = null, val topP: Double? = null, val maxOutputTokens: Int? = null,
-    val responseFormat: String? = null, val stream: Boolean = true, val store: Boolean = false) {
+    val responseFormat: String? = null, val stream: Boolean = true, val store: Boolean = false,
+    val reasoning:ReasoningPreference=ReasoningPreference.Auto,val observeHttp:Boolean=false) {
     override fun toString() = "LlmRequest([REDACTED])"
 }
 enum class ErrorKind { NETWORK, TIMEOUT, AUTHENTICATION, AUTHORIZATION, RATE_LIMIT, PLAN_USAGE_LIMIT,
@@ -30,7 +31,9 @@ data class LlmError(val kind: ErrorKind, val isRetryable: Boolean = false,
 data class Usage(val inputTokens: Long?, val outputTokens: Long?, val totalTokens: Long?)
 sealed interface LlmEvent {
     class TextDelta(val text: String) : LlmEvent { override fun toString() = "TextDelta([REDACTED])" }
-    class ReasoningDelta(val text: String) : LlmEvent { override fun toString() = "ReasoningDelta([REDACTED])" }
+    class ReasoningDelta(val text: String,val kind:ReasoningContent=ReasoningContent.ProviderVisibleReasoning) : LlmEvent { override fun toString() = "ReasoningDelta([REDACTED])" }
+    data class ReasoningDone(val kind:ReasoningContent):LlmEvent
+    data object HttpReady:LlmEvent
     data class ToolCallStarted(val index: Int) : LlmEvent
     class ToolCallDelta(val index: Int, val arguments: String) : LlmEvent { override fun toString() = "ToolCallDelta([REDACTED])" }
     data class ToolCallCompleted(val index: Int) : LlmEvent

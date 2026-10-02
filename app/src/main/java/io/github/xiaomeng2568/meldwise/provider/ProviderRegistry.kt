@@ -1,7 +1,9 @@
 package io.github.xiaomeng2568.meldwise.provider
 
+import kotlinx.serialization.Serializable
+
 object ProviderIds { const val CHATGPT="chatgpt"; const val DEEPSEEK="deepseek" }
-data class ModelRef(val providerId:String,val modelId:String)
+@Serializable data class ModelRef(val providerId:String,val modelId:String)
 
 /** Exact lookup only: an unavailable provider never selects another provider. */
 class ProviderRegistry(providers:List<LlmProvider>) {

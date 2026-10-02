@@ -1,0 +1,24 @@
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+// Resolves the existing ten locked graphs, without rewriting locks or requesting newer versions.
+allprojects {
+    afterEvaluate {
+        if (path == ':app') {
+            tasks.register('verifyFoundationLocks') {
+                doLast {
+                    def names = ['debugCompileClasspath','debugRuntimeClasspath','releaseCompileClasspath','releaseRuntimeClasspath',
+                        'debugUnitTestCompileClasspath','debugUnitTestRuntimeClasspath','releaseUnitTestCompileClasspath','releaseUnitTestRuntimeClasspath',
+                        'debugAndroidTestCompileClasspath','debugAndroidTestRuntimeClasspath']
+                    names.each { name ->
+                        def graph = configurations.getByName(name).incoming.resolutionResult
+                        def failed = graph.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
+                        if (!failed.empty) throw new GradleException('LOCK_GRAPH_UNRESOLVED: ' + name)
+                        if (graph.allComponents.size() < 2) throw new GradleException('LOCK_GRAPH_EMPTY: ' + name)
+                        println('LOCK_GRAPH_OK ' + name + ' components=' + graph.allComponents.size())
+                    }
+                    println('LOCK_GRAPHS_VERIFIED=10')
+                }
+            }
+        }
+    }
+}

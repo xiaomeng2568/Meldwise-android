@@ -15,7 +15,7 @@ class DeepSeekProvider(private val credentials:DeepSeekCredentials,private val n
     private val base:String="https://api.deepseek.com"):LlmProvider {
     override val id=ProviderIds.DEEPSEEK
     override val displayName="DeepSeek"
-    override val capabilities=ProviderCapability(setOf(Capability.STREAMING,Capability.USAGE,Capability.API_KEY))
+    override val capabilities=ProviderCapability(setOf(Capability.STREAMING,Capability.USAGE,Capability.API_KEY,Capability.REASONING))
     @Volatile private var models:List<LlmModel> = emptyList()
     @Volatile var catalogDiagnostic:ModelCatalogDiagnostic?=null; private set
     private val mutableInference=MutableStateFlow<InferenceDiagnostic?>(null)
@@ -99,13 +99,16 @@ class DeepSeekProvider(private val credentials:DeepSeekCredentials,private val n
         require(r.messages.sumOf { it.text.length }<=4_194_304)
         return buildJsonObject {
             put("model",r.model);put("stream",true)
+            ReasoningPolicy.effort(id,r.reasoning)?.let {value -> putJsonObject("reasoning") {put("effort",value)} }
             putJsonArray("input") { r.messages.forEach { m -> add(buildJsonObject { put("role",m.role.name.lowercase());put("content",m.text) }) } }
         }.toString()
     }
     override fun streamResponse(request:LlmRequest):Flow<LlmEvent> = callbackFlow {
         val call=java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>()
         val trace=InferenceTrace();mutableInference.value=null
-        val reader=ResponsesReader(trace,DeepSeekErrors::map,explicitIncomplete=true,codeCategory=DeepSeekErrors::category)
+        val reader=ResponsesReader(trace,DeepSeekErrors::map,explicitIncomplete=true,codeCategory=DeepSeekErrors::category,
+            reasoningReader=ReasoningReader(if(request.reasoning in setOf(ReasoningPreference.Low,ReasoningPreference.High,ReasoningPreference.Max))
+                ReasoningReadMode.DeepSeekVisible else ReasoningReadMode.None))
         var stage=InferenceStage.CREDENTIAL
         val job=launch(Dispatchers.IO) {
             try {
@@ -126,6 +129,7 @@ class DeepSeekProvider(private val credentials:DeepSeekCredentials,private val n
                         throw ProviderFailure(DeepSeekErrors.map(response.code,code,false))
                     }
                     stage=InferenceStage.STREAM_OPEN
+                    if(request.observeHttp) send(LlmEvent.HttpReady)
                     val parser=SseParser(requireNotNull(response.body).source())
                     trace.update { it.copy(streamBodyOpened=true,sseParserStarted=true) }
                     while(!reader.terminal) {
