@@ -12,14 +12,23 @@ android {
         applicationId = "io.github.xiaomeng2568.meldwise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100
-        versionName = "0.3-p2-foundation-sprint1"
+        versionCode = 200
+        versionName = "0.3-p2-sprint2-deepseek"
+        manifestPlaceholders["appLabel"] = "Meldwise"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    buildTypes { getByName("release") { isMinifyEnabled = false } }
+    buildTypes {
+        getByName("debug") {
+            // Separate engineering installation preserves the accepted Sprint 1 app/data.
+            applicationIdSuffix = ".sprint2"
+            resValue("string", "sprint2_app_name", "Meldwise · Sprint 2")
+            manifestPlaceholders["appLabel"] = "@string/sprint2_app_name"
+        }
+        getByName("release") { isMinifyEnabled = false }
+    }
     testOptions { unitTests.all { it.systemProperty("projectRoot", rootDir.absolutePath) } }
 }
 dependencies {

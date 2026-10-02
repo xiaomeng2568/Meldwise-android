@@ -5,6 +5,10 @@ import io.github.xiaomeng2568.meldwise.security.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import java.util.UUID
 import java.security.SecureRandom
 
@@ -22,25 +26,64 @@ object MessageIds {
         val buffer=java.nio.ByteBuffer.wrap(bytes); return UUID(buffer.long,buffer.long).toString()
     }
 }
-/** Small encrypted single-conversation journal; no process-restart request replay. */
+@Serializable private data class ChatSession(val providerId:String,val modelId:String,val messages:List<ChatMessage>)
+@Serializable private data class ChatJournal(val version:Int=2,val activeProviderId:String=ProviderIds.CHATGPT,
+    val activeModelId:String="UNKNOWN",val sessions:List<ChatSession> = emptyList())
+/** Bounded encrypted journal. Exact provider/model sessions never share request history. */
 class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
-    private val json=Json
+    private val json=Json { encodeDefaults=true }
     private var messages=emptyList<ChatMessage>()
     private var loaded=false
+    private var journal=ChatJournal()
+    @Synchronized fun activeRef():ModelRef { load();return ModelRef(journal.activeProviderId,journal.activeModelId) }
+    @Synchronized fun activate(ref:ModelRef):List<ChatMessage> {
+        load();validateRef(ref)
+        val next=journal.copy(activeProviderId=ref.providerId,activeModelId=ref.modelId)
+        persist(next)
+        return messages.toList()
+    }
+    @Synchronized fun activateProvider(id:String):List<ChatMessage> {
+        load()
+        val session=journal.sessions.lastOrNull { it.providerId==id }
+        return activate(ModelRef(id,session?.modelId ?: "UNKNOWN"))
+    }
+    private fun validateRef(ref:ModelRef) {
+        require(ref.providerId in setOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK))
+        require(ref.modelId.matches(Regex("[A-Za-z0-9._:/-]{1,128}")))
+    }
     @Synchronized fun load():List<ChatMessage> {
         if(!loaded) {
-            messages=blob.read()?.let { sealed -> val plain=box.open(sealed)
-                try { json.decodeFromString<List<ChatMessage>>(utf8(plain)) } finally { plain.fill(0) } } ?: emptyList()
-            require(messages.size<=200)
-            val recovered=messages.map { if(it.state in setOf(MessageState.PENDING,MessageState.STREAMING))
-                ChatMessage(it.id,it.parentMessageId,it.role,it.text,MessageState.INCOMPLETE) else it }
-            if(recovered.any { it.state==MessageState.INCOMPLETE } && recovered!=messages) save(recovered)
+            var migrated=false
+            journal=blob.read()?.let { sealed -> val plain=box.open(sealed)
+                try {
+                    val source=utf8(plain)
+                    val root=json.parseToJsonElement(source)
+                    if(root is JsonArray) {
+                        migrated=true
+                        ChatJournal(sessions=listOf(ChatSession(ProviderIds.CHATGPT,"UNKNOWN",json.decodeFromString<List<ChatMessage>>(source))))
+                    } else {
+                        require(root is JsonObject && root["version"]?.jsonPrimitive?.intOrNull==2)
+                        require(root["sessions"] is JsonArray && root.containsKey("activeProviderId") && root.containsKey("activeModelId"))
+                        json.decodeFromString<ChatJournal>(source)
+                    }
+                } finally { plain.fill(0) } } ?: ChatJournal()
+            require(journal.version==2 && journal.sessions.size<=32 && journal.sessions.sumOf { it.messages.size }<=200)
+            validateRef(ModelRef(journal.activeProviderId,journal.activeModelId))
+            journal.sessions.forEach { validateRef(ModelRef(it.providerId,it.modelId)) }
+            require(journal.sessions.map { ModelRef(it.providerId,it.modelId) }.distinct().size==journal.sessions.size)
+            var changed=migrated
+            val recovered=journal.copy(sessions=journal.sessions.map { s -> s.copy(messages=s.messages.map {
+                if(it.state in setOf(MessageState.PENDING,MessageState.STREAMING)) {
+                    changed=true;ChatMessage(it.id,it.parentMessageId,it.role,it.text,MessageState.INCOMPLETE)
+                } else it
+            }) })
+            if(changed) persist(recovered) else setJournal(recovered)
             loaded=true
         }
         return messages.toList()
     }
     @Synchronized fun begin(userText:String):Pair<String,List<LlmMessage>> {
-        load(); require(userText.isNotBlank() && userText.length<=32768 && messages.size<=196)
+        load(); require(userText.isNotBlank() && userText.length<=32768 && journal.sessions.sumOf { it.messages.size }<=196)
         val user=ChatMessage(MessageIds.create(),messages.lastOrNull()?.id,MessageRole.USER,userText,MessageState.COMPLETED)
         val assistant=ChatMessage(MessageIds.create(),user.id,MessageRole.ASSISTANT,"",MessageState.PENDING)
         // Do not silently include failed/incomplete assistant text or orphaned prior user messages.
@@ -54,7 +97,16 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
         return messages.toList()
     }
     private fun save(value:List<ChatMessage>) {
+        val others=journal.sessions.filterNot { it.providerId==journal.activeProviderId && it.modelId==journal.activeModelId }
+        persist(journal.copy(sessions=others+ChatSession(journal.activeProviderId,journal.activeModelId,value)))
+    }
+    private fun setJournal(value:ChatJournal) {
+        journal=value
+        messages=value.sessions.firstOrNull { it.providerId==value.activeProviderId && it.modelId==value.activeModelId }?.messages ?: emptyList()
+    }
+    private fun persist(value:ChatJournal) {
+        require(value.sessions.size<=32 && value.sessions.sumOf { it.messages.size }<=200)
         val plain=json.encodeToString(value).toByteArray(Charsets.UTF_8)
-        try { require(plain.size<=8_388_608); blob.write(box.seal(plain)); messages=value } finally { plain.fill(0) }
+        try { require(plain.size<=8_388_608); blob.write(box.seal(plain)); setJournal(value) } finally { plain.fill(0) }
     }
 }

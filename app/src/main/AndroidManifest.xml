@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:name=".MeldwiseApplication" android:label="Meldwise" android:icon="@drawable/ic_launcher"
+    <application android:name=".MeldwiseApplication" android:label="${appLabel}" android:icon="@drawable/ic_launcher"
         android:allowBackup="false" android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/network_security_config"

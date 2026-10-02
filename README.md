@@ -4,6 +4,8 @@ Meldwise 是一个 Android 多模型协作客户端。我们希望让多个模�
 
 目前完成了 Phase 2 Sprint 1：ChatGPT 登录、本地加密存储、模型选择和单模型聊天。这一轮已经验收并合并到 main，多模型协作会在后续阶段继续做。
 
+当前 Sprint 2 分支已接入 DeepSeek：在手机里配置独立加密的 API Key，加载官方模型列表，再选择模型聊天。本地 Debug、Release 各 200 项测试和构建/lint 已通过。开发者已确认真实模型加载、聊天和输出中途取消可用，取消后强行停止应用也未发现异常；具体证据范围见 [Sprint 2 接入记录](docs/第二阶段第二轮-DeepSeek-Provider.md)。
+
 v0.3 规格保持冻结。SIWC 兼容性仍按 CONDITIONAL（有条件通过）记录，正式发布还需要补充长周期和更多设备上的验证。
 
 ## 现在能做什么
@@ -13,6 +15,7 @@ v0.3 规格保持冻结。SIWC 兼容性仍按 CONDITIONAL（有条件通过）�
 - 进行单模型聊天，实时接收回答，也可以中途取消。
 - 加密保存登录状态和聊天记录，重开应用后恢复本地状态。
 - 在请求失败时显示脱敏诊断，方便定位问题。
+- 在 Sprint 2 分支选择 ChatGPT 或 DeepSeek；聊天记录按服务商和模型分开保存。
 
 当前支持文本聊天。多模型比较、协作、辩论、工具调用和图片输入暂时留在后续计划中。
 
@@ -40,11 +43,15 @@ v0.3 规格保持冻结。SIWC 兼容性仍按 CONDITIONAL（有条件通过）�
 
 依赖从 Google 和 Maven Central 获取。`local.properties`、密钥和账号凭据留在本机。
 
+Sprint 2 的 Debug 包叫“Meldwise · Sprint 2”，可与原应用并行安装；Release 保持正式包名。并行验证包使用独立的本地数据。
+
 ## 数据和恢复
 
 登录凭据、聊天记录保存在设备端，使用加密存储，并排除系统备份。
 
 发送消息时，内容会传给 OpenAI，由其按照相关政策处理。模型调用使用你的 ChatGPT 套餐。
+
+选择 DeepSeek 时，内容会传给 DeepSeek，使用你配置的 API Key 并按 DeepSeek API 计费。两家的凭据各自加密保存，ChatGPT 套餐不承担 DeepSeek 费用。
 
 中途取消的回答会保留已收到的部分，并显示相应状态。应用重开后恢复本地记录，继续发送需要用户操作。
 
@@ -83,6 +90,8 @@ Meldwise is an Android client for multi-model collaboration. Its goal is to let 
 
 Phase 2 Sprint 1 is complete and merged into main. It establishes ChatGPT authentication, encrypted local storage, model discovery, and Single Chat. Multi-model workflows remain planned work.
 
+The Sprint 2 feature branch adds DeepSeek with an independently encrypted API key, dynamic model discovery, and streaming Single Chat. Local verification passed 200 tests per Debug/Release variant, builds, and lint. Developer-observed real-device testing passed model loading, chat, and cancellation after partial output; subsequent force-stop showed no reported issue. Detailed protocol telemetry and post-force-stop restoration were not separately collected. See the [Sprint 2 report](docs/第二阶段第二轮-DeepSeek-Provider.md).
+
 The v0.3 specification remains frozen. SIWC compatibility remains CONDITIONAL; broader and longer-term validation is required before a public production release.
 
 ## Current features
@@ -92,6 +101,7 @@ The v0.3 specification remains frozen. SIWC compatibility remains CONDITIONAL; b
 - Streaming text chat with cancellation.
 - Encrypted local credentials and chat history.
 - Sanitized diagnostics for troubleshooting.
+- ChatGPT / DeepSeek selection and provider/model-bound conversations on the Sprint 2 branch.
 
 Compare, Collaborate, Debate, tool use, and image input are deferred.
 
@@ -113,9 +123,13 @@ Use JDK 17, Android SDK 35, and Gradle 8.13. Keep project and SDK paths ASCII an
 
 Dependencies resolve through Google and Maven Central. Keep local configuration and credentials outside version control.
 
+The Sprint 2 Debug APK uses a separate application ID for side-by-side validation. Existing app data remains in the original installation; Release retains the production ID.
+
 ## Privacy and recovery
 
 Credentials and conversations are encrypted on-device and excluded from system backup. Sending a message transmits its content to OpenAI under its policies and uses your ChatGPT Plan.
+
+When DeepSeek is selected, messages go to DeepSeek and incur DeepSeek API charges using the configured key. Credentials are isolated; ChatGPT Plan access does not cover DeepSeek usage.
 
 Interrupted responses retain their truthful local state. Restoring history does not automatically resume requests.
 

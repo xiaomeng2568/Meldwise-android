@@ -21,7 +21,7 @@ internal fun catalogNetworkError(failure:NetworkFault):LlmError {
 }
 class ChatGptProvider(private val tokens:TokenManager,private val network:NetworkClient,
     private val base:String=Siwc.RESOURCE) : LlmProvider {
-    override val id="openai-plan"
+    override val id=ProviderIds.CHATGPT
     override val displayName="ChatGPT Plan"
     override val capabilities=ProviderCapability(setOf(Capability.STREAMING,Capability.STORE_FALSE,Capability.USAGE,Capability.PLAN_USAGE))
     @Volatile private var models:List<LlmModel> = emptyList()
