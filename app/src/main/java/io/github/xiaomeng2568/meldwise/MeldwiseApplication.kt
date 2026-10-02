@@ -38,4 +38,7 @@ class AppContainer(context:Context) {
     val providers=ProviderRegistry(listOf(provider,deepSeek))
     val chat=ChatRepository(AndroidAtomicBlob(File(directory,"chat.v1"),8_388_640),
         AesGcmBox(chatKey::get,"meldwise.chat.v1",8_388_640))
+    private val compareKey=AndroidKey("meldwise.compare.v1")
+    val compare=io.github.xiaomeng2568.meldwise.data.CompareRepository(AndroidAtomicBlob(File(directory,"compare.v1"),8_388_640),
+        AesGcmBox(compareKey::get,"meldwise.compare.v1",8_388_640))
 }

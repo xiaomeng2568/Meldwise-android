@@ -1,84 +1,53 @@
 # Meldwise
 
-Meldwise 是一个 Android 多模型协作客户端。我们希望让多个模型分别回答、互相检查，再把结果整理给用户。
+Meldwise 是一个 Android 多模型聊天客户端。你可以单独聊，也可以把同一个问题交给两个模型，看看各自怎么回答。
 
-目前完成了 Phase 2 Sprint 1：ChatGPT 登录、本地加密存储、模型选择和单模型聊天。这一轮已经验收并合并到 main，多模型协作会在后续阶段继续做。
-
-当前 Sprint 2 分支已接入 DeepSeek：在手机里配置独立加密的 API Key，加载官方模型列表，再选择模型聊天。本地 Debug、Release 各 200 项测试和构建/lint 已通过。开发者已确认真实模型加载、聊天和输出中途取消可用，取消后强行停止应用也未发现异常；具体证据范围见 [Sprint 2 接入记录](docs/第二阶段第二轮-DeepSeek-Provider.md)。
-
-v0.3 规格保持冻结。SIWC 兼容性仍按 CONDITIONAL（有条件通过）记录，正式发布还需要补充长周期和更多设备上的验证。
+当前版本：**0.1.0 Alpha**（`v0.1.0-alpha.1`）。这是第一个公开测试版，欢迎试用和反馈。
 
 ## 现在能做什么
 
-- 使用 ChatGPT 账号连接，按账号套餐调用模型。
-- 加载账号可用的模型列表，手动选择模型。
-- 进行单模型聊天，实时接收回答，也可以中途取消。
-- 加密保存登录状态和聊天记录，重开应用后恢复本地状态。
-- 在请求失败时显示脱敏诊断，方便定位问题。
-- 在 Sprint 2 分支选择 ChatGPT 或 DeepSeek；聊天记录按服务商和模型分开保存。
+- 连接 ChatGPT 账号，使用账号可用的 ChatGPT 套餐模型。
+- 在手机上配置 DeepSeek API Key，加载官方模型列表。
+- 单模型聊天，实时接收回答，中途取消时保留已收到的内容。
+- 同时询问两个模型，分别查看回答和状态。
+- 调整 DeepSeek 思考强度，查看服务商返回的可见思考内容。
+- 加密保存本地凭据、聊天和对比记录，重开后恢复历史。
+- 切换浅色、深色、跟随系统和自定义重点色。
+- 阅读 Markdown、代码和纯文本，复制需要的内容。
 
-当前支持文本聊天。多模型比较、协作、辩论、工具调用和图片输入暂时留在后续计划中。
+模型按服务商和模型 ID 区分。加载模型、发送消息都由你操作；恢复历史会保留记录的状态。
 
-## 工程基础
+## 使用前了解一下
 
-工程使用 Kotlin、Jetpack Compose 和 Material 3，依赖通过手工组装。
+Alpha 版本还在打磨，SIWC 兼容性为 CONDITIONAL（有条件通过）。更多设备和长时间使用的验证仍在进行。
 
-登录采用 OAuth 授权码和 S256 PKCE，并校验 ID Token 的签名、issuer、audience 和 nonce。凭据通过 Android Keystore 和 AES-256-GCM 加密保存；刷新流程包含并发合并、原子写入和异常恢复处理。
+ChatGPT 的手动思考设置取决于当前登录路径和模型支持情况；界面只展示可用的用户可见摘要，无法查看隐藏的内部思维链。DeepSeek 返回的可见思考内容会与正文分开展示。
 
-网络层使用 OkHttp，模型目录和 SSE 流分别设置读取边界。模型选择、加载列表和发送消息都由用户明确操作，请求失败后的下一步也交给用户决定。
+Collaborate、Debate、工具调用、图片输入和 OpenAI API Key 接入留待后续。旧版 UI 存储格式的降级恢复暂未支持，完整真机 AndroidTest 套件也尚未全部验证。
+
+## 数据与费用
+
+凭据、聊天和对比记录通过 Android Keystore 和 AES-256-GCM 加密保存在设备上，并排除系统备份。
+
+发送消息会把内容传给所选服务商。ChatGPT 使用你的账号套餐权限；DeepSeek 使用你配置的 API Key，按 DeepSeek API 计费。两家的凭据各自保存，费用也各自计算。
+
+本机断开连接清除本地可用凭据，远端会话仍会保留。清除应用数据或卸载会移除本地记录。刷新结果无法确认时，应用会要求重新登录。
+
+反馈问题时，给出操作步骤和脱敏诊断就好。请把密钥、令牌、回调链接、账号信息和私人对话留在本机。
 
 ## 本地构建
 
-需要：
-
-- JDK 17
-- Android SDK 35
-- Gradle 8.13
-
-工程和 SDK 路径请使用英文字符，并避开空格。在本机的 `local.properties` 中配置 SDK 路径，然后运行：
+工程使用 Kotlin、Jetpack Compose、Material 3 和 OkHttp。需要 JDK 17、Android SDK 35、Gradle 8.13。工程和 SDK 路径建议使用英文字符，避开空格；在本机 `local.properties` 中配置 SDK 路径。
 
 ```sh
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-依赖从 Google 和 Maven Central 获取。`local.properties`、密钥和账号凭据留在本机。
-
-Sprint 2 的 Debug 包叫“Meldwise · Sprint 2”，可与原应用并行安装；Release 保持正式包名。并行验证包使用独立的本地数据。
-
-## 数据和恢复
-
-登录凭据、聊天记录保存在设备端，使用加密存储，并排除系统备份。
-
-发送消息时，内容会传给 OpenAI，由其按照相关政策处理。模型调用使用你的 ChatGPT 套餐。
-
-选择 DeepSeek 时，内容会传给 DeepSeek，使用你配置的 API Key 并按 DeepSeek API 计费。两家的凭据各自加密保存，ChatGPT 套餐不承担 DeepSeek 费用。
-
-中途取消的回答会保留已收到的部分，并显示相应状态。应用重开后恢复本地记录，继续发送需要用户操作。
-
-如果刷新令牌时连接中断，客户端可能无法判断服务端是否已经完成轮换。这种情况下会隔离旧凭据，并要求重新登录。本机“断开连接”清除的是本地可用凭据，远端会话仍会保留。
-
-清除应用数据或卸载应用会移除本地连接和记录；之后重新连接会建立新的安装身份。
-
-## 验证进度
-
-Sprint 1 已完成以下验证：
-
-- Debug、Release 完整单元测试各 104 项通过。
-- 两种构建通过，lint 均为 0 错误、1 条既有警告。
-- 真机 Keystore 和加密存储测试 4 项通过。
-- 模型目录、正常聊天和流式取消通过。
-- 开发者确认重开、强停重开、断网和本地记录恢复在测试范围内通过。
-- 最终生产提交的 push、PR CI，以及合并后的 main CI 均通过。
-
-冷启动自动化测试还没完成，相关行为目前采用开发者真机观察作为验收证据。
-
-两台物理设备、长期自然到期、令牌轮换期间的真实网络中断、跨进程刷新和独立安全审计，仍需要后续验证。详细过程和证据范围放在 `docs` 中。
-
-反馈问题时，提供操作步骤和脱敏诊断即可。令牌、回调链接、账号信息和私人对话请留在本机。
+依赖从 Google 和 Maven Central 获取。Debug 包为独立的 UI Preview 安装，Release 包名为 `io.github.xiaomeng2568.meldwise`。本机配置、签名材料和构建产物请放在版本控制之外。
 
 ## 项目说明
 
-Meldwise 是社区开发的非官方客户端，与 OpenAI 没有隶属或赞助关系。使用时请遵守服务商条款。
+Meldwise 是社区开发的非官方客户端，与服务商没有隶属或赞助关系。使用时请遵守服务商条款。服务商名称和图标归各自权利人所有，仅用于标识接入来源。
 
 源码采用 MPL-2.0 许可证。
 
@@ -86,63 +55,47 @@ Meldwise 是社区开发的非官方客户端，与 OpenAI 没有隶属或赞助
 
 # English
 
-Meldwise is an Android client for multi-model collaboration. Its goal is to let models answer independently, review each other’s work, and produce a combined result.
+Meldwise is an Android multi-model chat client. Chat with one model or ask two models the same question and read their answers independently.
 
-Phase 2 Sprint 1 is complete and merged into main. It establishes ChatGPT authentication, encrypted local storage, model discovery, and Single Chat. Multi-model workflows remain planned work.
+Current version: **0.1.0 Alpha** (`v0.1.0-alpha.1`), the first public prerelease.
 
-The Sprint 2 feature branch adds DeepSeek with an independently encrypted API key, dynamic model discovery, and streaming Single Chat. Local verification passed 200 tests per Debug/Release variant, builds, and lint. Developer-observed real-device testing passed model loading, chat, and cancellation after partial output; subsequent force-stop showed no reported issue. Detailed protocol telemetry and post-force-stop restoration were not separately collected. See the [Sprint 2 report](docs/第二阶段第二轮-DeepSeek-Provider.md).
+## Features
 
-The v0.3 specification remains frozen. SIWC compatibility remains CONDITIONAL; broader and longer-term validation is required before a public production release.
+- ChatGPT account connection with available plan-backed model access.
+- DeepSeek API-key configuration and dynamic model discovery.
+- Streaming Single Chat and two-model Compare.
+- Cancellation with partial-response preservation.
+- DeepSeek thinking controls and provider-visible reasoning, separate from the answer.
+- Encrypted local credentials, conversations and Compare history.
+- Light, Dark, System and custom accent themes.
+- Native Markdown, code and plain-text rendering with copy actions.
 
-## Current features
+Models are identified by provider and model ID. Requests require explicit user actions; restored history does not resume requests automatically.
 
-- ChatGPT account connection and plan-backed model access.
-- Explicit model discovery and selection.
-- Streaming text chat with cancellation.
-- Encrypted local credentials and chat history.
-- Sanitized diagnostics for troubleshooting.
-- ChatGPT / DeepSeek selection and provider/model-bound conversations on the Sprint 2 branch.
+## Limitations
 
-Compare, Collaborate, Debate, tool use, and image input are deferred.
+This is Alpha software. SIWC compatibility remains CONDITIONAL. Broader device coverage and long-duration validation are incomplete.
 
-## Foundation
+ChatGPT reasoning controls depend on the supported route and model. Only available user-visible summaries are shown; hidden internal chain-of-thought is unavailable. DeepSeek provider-visible reasoning remains separate from the final answer.
 
-The application uses Kotlin, Jetpack Compose, and Material 3 with manual dependency wiring.
+Collaborate, Debate, tools, image input and an OpenAI API-key provider are not implemented. Downgrading to older UI journal formats is unsupported. Full real-device AndroidTest coverage is not claimed.
 
-Authentication uses authorization-code OAuth, S256 PKCE, and ID-token validation. Credentials use Android Keystore and AES-256-GCM. Refresh handling includes single-flight coordination, atomic persistence, and rotation-uncertainty recovery.
+## Privacy and billing
 
-OkHttp transport and SSE parsing enforce operation-specific bounds. Provider requests require explicit user actions.
+Credentials and histories use Android Keystore-backed AES-256-GCM encryption and are excluded from system backup. Messages are sent to the selected provider under its policies. ChatGPT uses available account-plan access; DeepSeek incurs API charges using the configured key. Credentials remain isolated.
+
+Local disconnect leaves the remote session intact. Clearing app data or uninstalling removes local state. Uncertain refresh outcomes require reauthorization.
+
+Report issues with reproduction steps and sanitized diagnostics. Keep keys, tokens, callback URLs, account details and private conversations out of reports.
 
 ## Build
 
-Use JDK 17, Android SDK 35, and Gradle 8.13. Keep project and SDK paths ASCII and space-free. Configure the SDK in your local `local.properties`, then run:
+Use JDK 17, Android SDK 35 and Gradle 8.13. Keep project and SDK paths ASCII and space-free, and configure the SDK in your local `local.properties`.
 
 ```sh
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-Dependencies resolve through Google and Maven Central. Keep local configuration and credentials outside version control.
+Dependencies resolve through Google and Maven Central. Debug uses a separate UI Preview installation; Release uses `io.github.xiaomeng2568.meldwise`. Keep local configuration, signing material and build artifacts outside version control.
 
-The Sprint 2 Debug APK uses a separate application ID for side-by-side validation. Existing app data remains in the original installation; Release retains the production ID.
-
-## Privacy and recovery
-
-Credentials and conversations are encrypted on-device and excluded from system backup. Sending a message transmits its content to OpenAI under its policies and uses your ChatGPT Plan.
-
-When DeepSeek is selected, messages go to DeepSeek and incur DeepSeek API charges using the configured key. Credentials are isolated; ChatGPT Plan access does not cover DeepSeek usage.
-
-Interrupted responses retain their truthful local state. Restoring history does not automatically resume requests.
-
-An uncertain refresh outcome requires reauthorization. Local disconnect clears usable local credentials while leaving the remote session intact. Clearing app data or uninstalling removes local state.
-
-## Validation
-
-Sprint 1 passed 104 Debug and 104 Release unit tests, both builds, and lint with zero errors and one existing warning per variant. Four real-device storage tests passed.
-
-Model discovery, completed chat, and streaming cancellation were verified. Restart, offline behavior, and local restoration were accepted through developer-observed device tests. Final production-head push/PR CI and post-merge main CI passed.
-
-Cold-start automation remains incomplete. Two physical devices, natural long-term expiry, real refresh-rotation network interruption, cross-process refresh, and independent security review remain untested. Evidence and limitations are recorded in `docs`.
-
-Share sanitized diagnostics when reporting issues. Keep tokens, callback URLs, account details, and private conversations out of reports.
-
-Meldwise is an unofficial community project, unaffiliated with OpenAI. Use is subject to provider terms. Source is licensed under MPL-2.0.
+Meldwise is an unofficial community project, unaffiliated with its providers. Provider names and icons belong to their respective owners and identify service integrations. Use is subject to provider terms. Source is licensed under MPL-2.0.

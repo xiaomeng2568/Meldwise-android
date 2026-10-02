@@ -29,6 +29,7 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
         private set
     private val mutableInference=MutableStateFlow<InferenceDiagnostic?>(null)
     val inferenceDiagnostic:StateFlow<InferenceDiagnostic?> = mutableInference.asStateFlow()
+    fun invalidateCatalog() {models=emptyList();catalogDiagnostic=null;mutableInference.value=null}
     override suspend fun validateConnection():ProviderStatus = when(val state=tokens.state.value) {
         is AuthState.Connected->if(state.planEnabled) ProviderStatus.READY else ProviderStatus.IDENTITY_ONLY
         is AuthState.ReauthRequired->ProviderStatus.REAUTH_REQUIRED
@@ -136,6 +137,7 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
         } catch(_:Exception) { throw CatalogParseFailure(CatalogProtocol.PROTOCOL_MODEL_CATALOG) }
     }
     internal fun payload(request:LlmRequest):String {
+        require(request.reasoning==ReasoningPreference.Auto) {"UNSUPPORTED_REASONING"}
         require(request.stream && !request.store && request.messages.isNotEmpty() && request.messages.size<=200)
         require(request.temperature==null && request.topP==null && request.maxOutputTokens==null && request.responseFormat==null)
         require(request.messages.sumOf { it.text.length }<=4_194_304)
@@ -182,6 +184,7 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
                         throw ProviderFailure(error)
                     }
                     stage=InferenceStage.STREAM_OPEN
+                    if(request.observeHttp) send(LlmEvent.HttpReady)
                     val sse=SseParser(requireNotNull(response.body).source())
                     trace.update { it.copy(streamBodyOpened=true,sseParserStarted=true) }
                     while(!reader.terminal) {
