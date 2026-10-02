@@ -6,15 +6,18 @@ import io.github.xiaomeng2568.meldwise.AppContainer
 import io.github.xiaomeng2568.meldwise.auth.*
 import io.github.xiaomeng2568.meldwise.data.*
 import io.github.xiaomeng2568.meldwise.provider.*
+import io.github.xiaomeng2568.meldwise.network.ModelCatalogDiagnostic
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 class ScreenState(val models:List<LlmModel> = emptyList(),val selected:String?=null,
-    val messages:List<ChatMessage> = emptyList(),val busy:Boolean=false,val error:String?=null) {
+    val messages:List<ChatMessage> = emptyList(),val busy:Boolean=false,val error:String?=null,
+    val catalogDiagnostic:ModelCatalogDiagnostic?=null) {
     override fun toString()="ScreenState([REDACTED])"
 }
 class MainViewModel(private val container:AppContainer):ViewModel() {
     val auth=container.tokens.state
+    val inferenceDiagnostic=container.provider.inferenceDiagnostic
     private val mutable=MutableStateFlow(ScreenState())
     val screen:StateFlow<ScreenState> = mutable
     private var chatJob:Job?=null
@@ -26,8 +29,9 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
     } }
     private fun replace(models:List<LlmModel> = screen.value.models,selected:String?=screen.value.selected,
-        messages:List<ChatMessage> = screen.value.messages,busy:Boolean=screen.value.busy,error:String?=null) {
-        mutable.value=ScreenState(models,selected,messages,busy,error)
+        messages:List<ChatMessage> = screen.value.messages,busy:Boolean=screen.value.busy,error:String?=null,
+        catalogDiagnostic:ModelCatalogDiagnostic?=screen.value.catalogDiagnostic) {
+        mutable.value=ScreenState(models,selected,messages,busy,error,catalogDiagnostic)
     }
     fun connect(browser:(String)->Unit) {
         if(authJob?.isActive==true || chatJob?.isActive==true || loadJob?.isActive==true) return
@@ -43,12 +47,12 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     fun loadModels() {
         if(screen.value.busy) return
         loadJob=viewModelScope.launch {
-            replace(busy=true)
+            replace(busy=true,catalogDiagnostic=null)
             try { val models=container.provider.listModels(); replace(models=models,selected=null) }
             catch(cancel:CancellationException) { throw cancel }
             catch(failure:ProviderFailure) { replace(error=failure.error.kind.name) }
             catch(_:Exception) { replace(error="MODEL_CATALOG_UNAVAILABLE") }
-            finally { replace(busy=false,error=screen.value.error) }
+            finally { replace(busy=false,error=screen.value.error,catalogDiagnostic=container.provider.catalogDiagnostic) }
         }
     }
     fun select(id:String) { if(!screen.value.busy && screen.value.models.any { it.id==id }) replace(selected=id) }

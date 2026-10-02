@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.xiaomeng2568.meldwise.auth.*
 import io.github.xiaomeng2568.meldwise.ui.MainViewModel
+import io.github.xiaomeng2568.meldwise.ui.errorLabel
+import io.github.xiaomeng2568.meldwise.ui.roleLabel
+import io.github.xiaomeng2568.meldwise.ui.messageStateLabel
 
 class MainActivity:ComponentActivity() {
     private val viewModel by lazy { ViewModelProvider(this,object:ViewModelProvider.Factory {
@@ -29,51 +32,58 @@ class MainActivity:ComponentActivity() {
             MaterialTheme {
                 val screen by viewModel.screen.collectAsStateWithLifecycle()
                 val auth by viewModel.auth.collectAsStateWithLifecycle()
+                val inference by viewModel.inferenceDiagnostic.collectAsStateWithLifecycle()
                 var input by remember { mutableStateOf("") }
                 var expanded by remember { mutableStateOf(false) }
                 val ready=auth is AuthState.Connected && (auth as AuthState.Connected).planEnabled
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Text("Meldwise · Production Foundation",style=MaterialTheme.typography.titleLarge)
-                        Text("Unofficial client · Sprint 1 validation build. SIWC compatibility remains CONDITIONAL.",style=MaterialTheme.typography.bodySmall)
-                        Text("Auth: "+when(val a=auth) {
-                            AuthState.Restoring->"Restoring"; AuthState.Disconnected->"Disconnected"
-                            AuthState.Authenticating->"Authorizing"; AuthState.Refreshing->"Refreshing"
-                            AuthState.StorageUnavailable->"Secure storage unavailable"
-                            is AuthState.ReauthRequired->"ReauthRequired · ${a.reason.name}"
-                            is AuthState.Connected->if(a.planEnabled) "Connected · ChatGPT Plan" else "Connected · identity only"
+                        Text("Meldwise · 生产基础验证",style=MaterialTheme.typography.titleLarge)
+                        Text("非官方客户端 · 第 1 轮验证版。SIWC 兼容性仍为有条件通过。",style=MaterialTheme.typography.bodySmall)
+                        Text("登录状态："+when(val a=auth) {
+                            AuthState.Restoring->"恢复中"; AuthState.Disconnected->"未连接"
+                            AuthState.Authenticating->"授权中"; AuthState.Refreshing->"凭据续期中"
+                            AuthState.StorageUnavailable->"安全存储不可用"
+                            is AuthState.ReauthRequired->"需要重新授权 · ${errorLabel(a.reason.name)}"
+                            is AuthState.Connected->if(a.planEnabled) "已连接 · ChatGPT 套餐" else "已连接 · 仅身份授权"
                         })
                         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             Button(enabled=!screen.busy && auth!=AuthState.StorageUnavailable,onClick={ viewModel.connect { url ->
                                 startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
-                            } }) { Text("Continue with ChatGPT") }
-                            TextButton(enabled=!screen.busy && auth is AuthState.Connected,onClick=viewModel::disconnect) { Text("Disconnect locally") }
+                            } }) { Text("连接 ChatGPT") }
+                            TextButton(enabled=!screen.busy && auth is AuthState.Connected,onClick=viewModel::disconnect) { Text("本机断开") }
                         }
                         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            Button(enabled=ready && !screen.busy,onClick=viewModel::loadModels) { Text("Load models") }
+                            Button(enabled=ready && !screen.busy,onClick=viewModel::loadModels) { Text("加载模型") }
                             Box {
                                 OutlinedButton(enabled=screen.models.isNotEmpty() && !screen.busy,onClick={expanded=true}) {
-                                    Text(screen.models.firstOrNull { it.id==screen.selected }?.displayName ?: "Select model") }
+                                    Text(screen.models.firstOrNull { it.id==screen.selected }?.displayName ?: "选择模型") }
                                 DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
                                     screen.models.forEach { model->DropdownMenuItem(text={Text(model.displayName)},onClick={ viewModel.select(model.id); expanded=false }) }
                                 }
                             }
                         }
-                        screen.error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
+                        screen.error?.let { Text(errorLabel(it),color=MaterialTheme.colorScheme.error) }
                         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            inference?.let { diagnostic ->
+                                item(key="inference-diagnostic") { Text(diagnostic.summary(),style=MaterialTheme.typography.bodySmall) }
+                            }
+                            screen.catalogDiagnostic?.let { diagnostic ->
+                                item(key="model-catalog-diagnostic") { Text(diagnostic.summary(),style=MaterialTheme.typography.bodySmall) }
+                            }
                             items(screen.messages,key={it.id}) { message->
                                 Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
-                                    Text("${message.role} · ${message.state}",style=MaterialTheme.typography.labelSmall)
+                                    Text("${roleLabel(message.role.name)} · ${messageStateLabel(message.state.name)}",style=MaterialTheme.typography.labelSmall)
                                     Text(message.text)
                                 } }
                             }
                         }
-                        Text("Chats are stored encrypted on this device. Sending transmits content to OpenAI under its policies and uses your ChatGPT Plan. No API-key or model fallback. Local disconnect does not revoke the remote session.",style=MaterialTheme.typography.bodySmall)
+                        Text("对话加密保存在此设备。发送时，内容会传给 OpenAI 并按其政策处理，使用你的 ChatGPT 套餐。不自动切换 API 密钥或模型。本机断开不会撤销远端会话。",style=MaterialTheme.typography.bodySmall)
                         OutlinedTextField(value=input,onValueChange={if(it.length<=32768) input=it},enabled=!screen.busy,
-                            label={Text("Single chat")},maxLines=4,modifier=Modifier.fillMaxWidth())
+                            label={Text("单模型对话")},maxLines=4,modifier=Modifier.fillMaxWidth())
                         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            Button(enabled=ready && screen.selected!=null && !screen.busy && input.isNotBlank(),onClick={viewModel.send(input);input=""}) { Text("Send") }
-                            OutlinedButton(enabled=screen.busy,onClick=viewModel::cancel) { Text("Cancel") }
+                            Button(enabled=ready && screen.selected!=null && !screen.busy && input.isNotBlank(),onClick={viewModel.send(input);input=""}) { Text("发送") }
+                            OutlinedButton(enabled=screen.busy,onClick=viewModel::cancel) { Text("取消") }
                         }
                     }
                 }
