@@ -1,5 +1,6 @@
 # Gradle files
 .gradle/
+.kotlin/
 build/
 
 # Local configuration file (sdk path, etc)
@@ -14,6 +15,7 @@ captures/
 .cxx/
 *.aab
 *.apk
+artifacts/
 output-metadata.json
 
 # IntelliJ

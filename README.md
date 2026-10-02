@@ -1,163 +1,87 @@
-# Meldwise for Android
-
-**中文 | English**
-
-Meldwise 是一个 **Local-first、面向 Android 的多模型协作客户端**。
-
-它的目标不是做“又一个多 Provider 聊天壳”，而是让不同 AI 模型围绕同一个问题进行独立作答、对照、协作、互审与综合。
-
-Meldwise is a **local-first Android client for resilient multi-model collaboration**.
-
-Its goal is not to become just another multi-provider chat shell, but to let different AI models independently answer, compare, review, collaborate, and synthesize around the same task.
-
----
+# Meldwise — 生产基础 Sprint 1 / Production Foundation Sprint 1
 
 ## 中文
 
-### 项目定位
+Meldwise 是非官方 Android 多模型协作客户端。本仓库当前交付 Phase 2 Sprint 1 的生产基础：先验证可靠的 ChatGPT 套餐登录与单模型聊天；尚未实现多模型协作功能。v0.3 规格保持冻结。Phase 1 可行性结论为 GO，**SIWC 兼容性仍为 CONDITIONAL，不是公共生产发布或无条件生产就绪**。最新验收、提交与 CI 状态见[最终验收报告](docs/phase-2-sprint-1-final-acceptance.md)。
 
-Meldwise 的核心是 **Multi-Model Collaboration Harness（多模型协作编排层）**。
+### 已实现范围
 
-计划中的核心模式：
+- 独立 Kotlin / Compose 单模块工程，手工依赖组装；不复制实验架构，不使用 Room / Hilt。
+- OAuth 授权码 + S256 PKCE、安装级 host identity、可信发现及 RS256 ID Token 校验，有界 JWKS 刷新。
+- TokenManager 单进程刷新 single-flight、scope 检查及 ReauthRequired。
+- Android Keystore + AES-256-GCM、加密原子会话持久化、刷新前崩溃标记、隔离轮换不确定状态。
+- Provider 领域基础、ChatGPT 套餐适配器、OkHttp、有界 SSE、取消、超时和固定结构的内存脱敏诊断。
+- 中文最小界面：连接状态、显式加载/选择模型、单模型流式聊天。不自动切换模型、API 密钥或计费路径。
+- 加密本地聊天记录；中断后的未完成状态如实恢复，不自动续传或重放。
 
-- **Single**：单模型正常对话
-- **Compare**：多个模型并行回答
-- **Collaborate**：多个候选答案交由 Judge 综合
-- **Debate**：模型互审后再综合最终答案
+仅支持已验证的文本流式基础能力；不包含协作/辩论、工具调用、图片输入、多账号切换或正式远程退出界面。
 
-### 当前状态
+### 构建
 
-- **Specification:** v0.3 **FROZEN**
-- **Current stage:** Gate 0 → Gate 1A → Gate 1B
-- **Platform:** Android
-- **Language:** Kotlin
-- **UI:** Jetpack Compose
-- **License:** MPL-2.0
+使用 JDK 17、Android SDK 35、Gradle 8.13。工程与 SDK 路径必须为 ASCII 且无空格。在不纳入版本管理的 local.properties 中配置本机 SDK 路径，然后运行：
 
-> 在拿到 Gate 1 的真实设备证据之前，不编写 v0.4。
+```sh
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
 
-当前优先级不是漂亮 UI，也不是完整 OAuth 架构，而是验证高风险技术前提：
+依赖来自 Google / Maven Central。构建配置禁止包含 API 密钥、client secret 或账号信息。构建/打开应用不自动发起服务请求；登录、加载模型与发送消息均需显式操作。
 
-1. Android 原生开源/本地客户端使用当前 ChatGPT Plan / SIWC 流程的支持边界；
-2. Android 真机上的 `127.0.0.1:<random-port>` loopback callback 是否可靠；
-3. 浏览器切换、后台、取消、重复回调、端口冲突等真实场景是否可以稳定处理；
-4. 是否存在足以阻止后续 SIWC Gate 的技术或合规问题。
+### 隐私与恢复
 
-### 设计原则
+对话和凭据在设备端加密保存，并排除系统备份。发送消息会把内容传给 OpenAI 并按其政策处理；本地优先不代表内容永不离开设备。清除应用数据或卸载会移除本地连接状态，之后连接时生成新的安装身份。
 
-- **Local-first**
-- **Provider-agnostic**
-- **Resilience-first**
-- 不静默切换模型
-- 不静默切换计费路径
-- 不隐藏跨 Provider 数据流向
-- 不把部分失败伪装成成功
-- 先拿真实证据，再做生产架构
+刷新中断可能无法确定服务端是否已轮换令牌：旧凭据被加密隔离，不重放，需重新授权；只有原子写入并读回完整成功后才发布新凭据。本机断开不会撤销远端会话或删除服务端客户端。
 
-### 隐私说明
+真机存储测试及开发者确认的重开/断网/聊天恢复已在测试范围内通过；冷启动自动测试未完成，不能宣称 5/5 自动测试通过。未验证长期自然过期、两台物理设备、真实轮换网络中断、跨进程刷新、独立安全/合规审计、硬件密钥保障或真实断电恢复。JVM 内存中的明文无法保证彻底清零。报告问题时不要提供令牌、回调/浏览器 URL、响应正文或账号信息。
 
-“Local-first”指的是会话历史和应用状态优先保存在设备本地，**不代表请求内容不会发送给模型服务商**。
+### 报告与许可
 
-当用户调用 OpenAI、DeepSeek 或其他 Provider 时，相应内容会发送给所选服务商，并受各服务商自己的隐私政策与服务条款约束。
+- [Phase 1 可行性决策](docs/phase-1-feasibility-decision.md)
+- [Sprint 1 最终验收 / Final acceptance](docs/phase-2-sprint-1-final-acceptance.md)
+- [交付与本地验证](docs/production-foundation-sprint-1-report.md)
+- [安全及崩溃窗口](docs/security-and-recovery.md)
+- [真机证据](docs/production-device-validation.md)
 
-在 Collaborate / Debate 模式中，一个 Provider 的输出也可能被发送给另一个 Provider 作为 Reviewer 或 Judge。
-
-### 开发纪律
-
-v0.3 已冻结。
-
-下一份有意义的项目文档应该是 **Gate 1 真机证据报告**，而不是继续扩展纸面规格。
-
-Phase 1 中的 SIWC 代码属于 **disposable spike**：
-
-- 不实现生产级 `OAuthManager`
-- 不引入 Room
-- 不引入复杂 DI / Hilt 架构
-- 不制作正式 UI
-- Spike 只负责回答可行性问题
-- Spike 成功后，生产实现重新设计/重写，不持续给实验代码打补丁
-
----
+本项目与 OpenAI 无隶属、认可或赞助关系。使用者须遵守服务商条款。源码采用 [MPL-2.0](LICENSE)。验收后停止，不自动开始 Sprint 2 或发布。
 
 ## English
 
-### Project Positioning
+Phase 2 Sprint 1 establishes the production foundation on production/foundation-sprint-1. v0.3 remains frozen. This is a foundation validation build, **not a production-ready release**. Phase 1 feasibility is GO; SIWC compatibility remains CONDITIONAL. See the [final acceptance report](docs/phase-2-sprint-1-final-acceptance.md) for actual verification and closure status.
 
-Meldwise is a **Multi-Model Collaboration Harness** for Android.
+## Scope
 
-Planned core modes:
+- Fresh single-module Kotlin / Compose application, manual dependency wiring; no spike classes, Room or Hilt.
+- OAuth authorization code + S256 PKCE + installation host identity; trusted discovery and RS256 ID-token validation with bounded JWKS refresh.
+- TokenManager with single-process refresh single-flight, scope checks and ReauthRequired.
+- Android Keystore AES-256-GCM, encrypted atomic session persistence, pre-refresh crash marker and quarantine of uncertain rotation.
+- Provider domain and ChatGPT Plan adapter, OkHttp, bounded SSE parser, cancellation, deadlines and closed-schema memory-only diagnostics.
+- Minimal connection/status/model selector/Single chat. Model catalog loading and sending are explicit actions. No model, billing or API-key fallback.
+- Encrypted local chat journal; partial responses survive interruption as Incomplete, never automatically replayed.
 
-- **Single** — standard single-model conversation
-- **Compare** — multiple models answer in parallel
-- **Collaborate** — multiple candidate answers are synthesized by a Judge
-- **Debate** — models cross-review each other before final synthesis
+The adapter currently supports the verified text/stream baseline only. No collaboration, Debate, tools, image input, multi-account switching or production remote-logout screen is included.
 
-### Current Status
+## Build
 
-- **Specification:** v0.3 **FROZEN**
-- **Current stage:** Gate 0 → Gate 1A → Gate 1B
-- **Platform:** Android
-- **Language:** Kotlin
-- **UI:** Jetpack Compose
-- **License:** MPL-2.0
+JDK 17, Android SDK 35, Gradle 8.13. Paths for SDK/project must be ASCII and space-free. Set your own ignored local.properties SDK path, then run ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug.
 
-> No v0.4 will be written before real Gate 1 device evidence exists.
+Dependencies resolve through Google and Maven Central. No API key, client secret or account information belongs in build configuration. No provider request occurs merely by building or opening the app. Real authorization and model requests require explicit user actions.
 
-The current priority is not polished UI or production OAuth architecture. It is to validate the highest-risk assumptions:
+## Privacy and recovery
 
-1. Whether the current ChatGPT Plan / SIWC flow is acceptable for a native Android open-source/local client;
-2. Whether `127.0.0.1:<random-port>` loopback callbacks work reliably on real Android devices;
-3. Whether browser switching, backgrounding, cancellation, duplicate callbacks, and port collisions behave acceptably;
-4. Whether any technical or compliance issue is serious enough to block later SIWC gates.
+Conversations and credentials are encrypted locally in backup-excluded app storage. Sending a message transmits its content to OpenAI under OpenAI's policies; local-first does not mean local-only. Clear app data / uninstall removes local connection state and creates a new installation identity on subsequent connection.
 
-### Principles
+An interrupted refresh cannot prove whether the provider rotated its token. The old credential remains encrypted in a quarantined record and is not replayed; reauthorization is required. A complete replacement is published only after atomic write and readback. Disconnect locally clears usable credentials but does **not** revoke the remote renewable session or delete the provider client.
 
-- **Local-first**
-- **Provider-agnostic**
-- **Resilience-first**
-- No silent model fallback
-- No silent billing-path changes
-- No hidden cross-provider data flow
-- No presenting partial failure as success
-- Evidence before production architecture
+Keystore hardware backing and actual on-device crash/backup behavior require device validation. Plaintext values exist temporarily in JVM memory; there is no claim of guaranteed heap zeroization. Do not export browser/callback URLs, token values, response bodies or account identity in bug reports.
 
-### Privacy
+Four isolated real-device storage tests and developer-observed restart/offline/chat-restoration behavior passed within tested scope. Cold Activity automation did not complete; do not claim 5/5 instrumentation PASS. Two physical devices, long-term natural expiry, real refresh-rotation network interruption, cross-process refresh, independent audit, hardware backing and real power-loss recovery remain untested. Stop after Sprint 1 closure; no automatic Sprint 2 or public release.
 
-“Local-first” means that conversation history and application state are primarily stored on the user's device. It **does not** mean that prompts never leave the device.
+## Reports
 
-When the user invokes OpenAI, DeepSeek, or another provider, the relevant content is transmitted to that provider and processed under its own privacy policy and terms.
+- [Phase 1 feasibility decision](docs/phase-1-feasibility-decision.md)
+- [Sprint 1 final acceptance and closure](docs/phase-2-sprint-1-final-acceptance.md)
+- [Sprint 1 delivery and verification](docs/production-foundation-sprint-1-report.md)
+- [Security and crash-window behavior](docs/security-and-recovery.md)
+- [Explicit real-device acceptance plan](docs/production-device-validation.md)
 
-In Collaborate / Debate modes, output from one provider may also be sent to another provider acting as a Reviewer or Judge.
-
-### Development Discipline
-
-v0.3 is frozen.
-
-The next meaningful project document should be a **Gate 1 real-device evidence report**, not another speculative specification revision.
-
-SIWC work during Phase 1 is a **disposable spike**:
-
-- no production `OAuthManager`
-- no Room
-- no heavy DI / Hilt architecture
-- no polished production UI
-- the spike exists only to answer feasibility questions
-- if the spike succeeds, production authentication code should be redesigned/reimplemented rather than patched indefinitely
-
----
-
-## License
-
-Meldwise source code is licensed under the **Mozilla Public License 2.0 (MPL-2.0)**.
-
-See [LICENSE](./LICENSE).
-
-## Disclaimer
-
-Meldwise is an unofficial open-source project.
-
-It is not affiliated with, endorsed by, or sponsored by OpenAI, DeepSeek, or any other model provider.
-
-OpenAI and ChatGPT are trademarks of OpenAI. Other product and company names may be trademarks of their respective owners.
-
-Users are responsible for complying with the applicable terms of each provider they connect.
+Meldwise is unofficial and is not affiliated with, endorsed by, or sponsored by OpenAI. Users must comply with provider terms. Source: [MPL-2.0](LICENSE).

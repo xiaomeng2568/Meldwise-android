@@ -1,0 +1,142 @@
+# Meldwise Production Foundation Sprint 1 Report
+
+记录日期：2026-10-02（Asia/Shanghai）。当前结论：**最终集成与本地验证通过；最终真机与新 HEAD CI 验收待完成，PR 保持 Draft。不是生产发布批准。** 第 1–6 节保留初始交付历史，最新状态以末尾 SPRINT 1 FINAL ACCEPTANCE 和最终验收报告为准。
+
+Phase 1 决策：GO TO PRODUCTION IMPLEMENTATION；SIWC compatibility：CONDITIONAL，二者不互相替代。
+
+## 1. 工程隔离与环境
+
+- 独立工作目录：P2-Production-Foundation（机器本地绝对路径不纳入版本管理）。
+- 独立本地 checkout，分支 production/foundation-sprint-1；从已提交基线 dccaab36328c60975e5515198ef680a5413039a2 建立，没有复制旧工程未提交的 spike 架构。
+- JDK 17 / Gradle 8.13 / AGP 8.9.2 / Kotlin 2.1.20；compile/target SDK 35，min SDK 26。既有 SDK 未重新安装。项目与 SDK 路径均为无空格 ASCII 路径。
+- 单 app 模块、Kotlin + Compose Material 3、手动依赖组装；无 Room/Hilt。
+- 用户许可从官方 Google/Maven Central 下载工程依赖。版本目录与依赖锁已生成，Gradle Wrapper 使用官方 SHA-256 校验值。
+- 原始冻结标准文件未改动，SHA-256：2F64D6C93FEF56184A4EA38B819389397C920B2D4268D888683D3033C0116A78。
+- 旧工程既有修改和所有 Gate-1-Report 文件保留。没有远程推送、手机安装、生产发布或提供商账号操作。
+
+## 2. 已实现内容
+
+| 用户要求 | 本次实现 | 边界 |
+| --- | --- | --- |
+| 干净 production branch | 独立 checkout 和 production/foundation-sprint-1 | 不带入旧脏目录 |
+| 正式 Auth | OAuthCoordinator、PKCE、loopback、可信 discovery、ID token/JWKS、TokenManager、scopes、ReauthRequired | 单选账号、单进程；无客户端 secret/API key |
+| Credential | Android Keystore AES-256-GCM、AtomicFile、fsync、完整记录 readback、刷新前事务标记 | 旋转结果未知则隔离并要求重新授权，不重放旧 RT |
+| 备份/恢复 | noBackupFilesDir、备份/设备转移排除、allowBackup=false | OEM/实际断电行为仍需真机验证 |
+| Provider domain | LlmProvider / LlmRequest / LlmEvent / LlmError / ProviderCapability | 只实现 ChatGPT Plan 文本流适配器，不做 DeepSeek/协作层 |
+| Network | OkHttp、大小受限 SSE、超时、取消、脱敏诊断 | 无自动连接重试、POST 重放、模型/API-key 回退 |
+| 最小 UI | Connect/status/catalog/selector/Single chat/Cancel | 模型加载、选择、发送均需明确操作；无自动请求 |
+| 本地会话恢复 | 独立密钥加密单会话 journal、UUIDv7、parentMessageId、200 ms 周期提交与最终提交 | 重启后的 Pending/Streaming 标为 Incomplete，不自动恢复请求 |
+
+OpenAI Docs 用于确定协议、模型目录字段及信任边界；不是把 spike 类改名后作为生产代码。官方 Models 目录的 models/visibility/display_name/slug 被正确使用；不发送当前 SIWC preview 不支持的 temperature/top_p/max_output_tokens 等参数。[协议与来源详情](security-and-recovery.md)。
+
+## 3. 实际验证结果
+
+最终对锁定依赖执行离线全量检查，退出码 0，BUILD SUCCESSFUL：
+
+| 检查 | Debug | Release |
+| --- | --- | --- |
+| APK 构建 | PASS | PASS，unsigned，仅工程验证 |
+| JVM 单元/本机模拟服务测试 | 44/44 PASS，0 failure/error | 44/44 PASS，0 failure/error |
+| Android lint | 0 error / 15 warning | 0 error / 9 warning |
+
+另：Android instrumentation APK 已编译，**未在手机运行**。CI workflow 已配置，**未在远端执行**。
+
+44 项 JUnit 测试由 FoundationTests（34）、ProviderTransportTests（6）、SecurityBoundaryTests（4）组成。全部数据为合成数据；MockWebServer 只监听本机测试接口。覆盖：AES-GCM 新 nonce/篡改/AAD、完整记录持久化、存储失败不发布、3 调用者单 owner、排队失败不重试、冷加载过期检查、invalid_grant、未知旋转隔离、未完成事务恢复、取消、scope 限制、账号连续性、安装身份复用、SSE framing/大小/UTF-8、终态空 output 的流提取、错误 role/type/text、partial journal、闭合诊断、HTTP 取消/跳转、PKCE RFC 向量、错误 state、JWT 声明/签名/未知 key 刷新、一次资源 POST、401 不重放、EOF Incomplete、参数拒绝、能力交集及备份/进程/日志静态边界。另专门验证 503 Retry-After: 0 不产生隐式第二次请求，以及请求 body 的 one-shot 标记。
+
+JUnit/HTML 原始报告位于 app/build/test-results 和 app/build/reports。静态扫描不是动态“不泄漏”证明；本地单元测试不是实际 Android Keystore、断电或提供商行为证据。
+
+剩余 lint 警告为锁定依赖的可升级提示与 String.toUri 风格建议，没有压制安全错误。升级提示不代表本轮完成依赖安全审计。Gradle 还提示插件存在面向 Gradle 9 的弃用行为；本轮固定 Gradle 8.13。
+
+## 4. 下载/修复记录
+
+- 初次编译发现 SSE StringBuilder.dropLast 返回 CharSequence 与 String 不匹配，已修正并重跑。
+- 首轮依赖下载遇到 jsr305 2.0.2 的 TLS handshake 错误；没有降低 TLS/关闭证书校验。测试注解依赖显式固定为已有官方缓存的 3.0.2，剩余官方 lint 依赖随后正常下载。
+- 首次离线 Release 检查因 lint-gradle 31.9.2 尚未缓存而停止；下载后最终离线 Debug/Release 全量验证通过。
+- PowerShell 首次未加引号的 Gradle -D 超时参数被拆分成任务名，未执行构建；修正引号后重跑。
+- 加固刷新等待者共享失败、跨线程取消可见性、空 terminal 输出读取、scope 拒绝处理、后台取消及周期持久化失败边界。所有最终源码均重新构建/测试。
+- 防止 OkHttp 特定状态的 follow-up：POST body 标为 one-shot，503 的内部自动重试被禁止，网络 interceptor 拦截同一 call 的第二次 exchange。新增两项测试，最终离线全量检查再次通过。
+
+## 5. 安装包与证据范围
+
+应用包名 io.github.xiaomeng2568.meldwise，显示名称 Meldwise，版本 0.3-p2-foundation-sprint1。不再沿用 Gate 1C-B 安装包名称。
+
+- artifacts/Meldwise-P2-Foundation-Sprint1-debug.apk
+  - SHA-256：1A102E41BEF9DC62F522C4F2C29E01BEE301564075945C77A281B4F1CCA9DC60
+- artifacts/Meldwise-P2-Foundation-Sprint1-release-unsigned.apk
+  - SHA-256：12204593088A535926B4A0B5D353D090F0066AAC8364AE29CA76511FE8F0401E
+
+安装包属于验证构建，Release 未签署生产签名，不是可发布版本。APK 不进入 Git；源码、依赖锁、工作流、报告进入本地生产分支。构建哈希对应本次完成的构建，不保证重新构建字节完全一致。
+
+本轮真实提供商 authorization/refresh/resource/model 请求数：**0**。没有采集真实 token、回调 URL、账号身份或响应正文。
+
+## 6. 未完成的验收 / 下一步
+
+正式代码的真实 authorization -> ID validation -> encrypted persistence -> 重开恢复 -> 一次 resource invocation 尚未验证；Keystore instrumentation、OEM backup exclusion、真实 process death/commit、独立安全与合规评审亦未完成。
+
+Phase 1 的四项 NOT TESTED 继续保留：两台物理设备、长时间自然过期、真实提供商旋转期间网络中断、跨进程刷新协调。单进程生产基础不能把这些空缺改为 PASS。
+
+建议先执行[本地设备与正式链路验收清单](production-device-validation.md)，任何提供商调用需另行确认。停在 Sprint 1 交付，不自动开展下一个功能冲刺或发布。
+
+## SPRINT 1 FINAL ACCEPTANCE
+
+### IMPLEMENTED
+
+- 在 production/foundation-sprint-1 合入已验收的模型目录与推理修复，不复制 Phase 1 spike；集成提交 d657974389c8f1ca31be11c3938f00e519deae51。
+- 成功模型目录响应独享 2 MiB 上限；普通/auth/token/error 保留 256 KiB，SSE 继续逐帧读取，不整流缓存。
+- 支持 content_part.done、output_item.done 的最终文本；严格验证助手关联、文本一致性、终态和既有大小上限。
+- 保留刷新 owner/等待者共享失败及确定性同步测试、已发布 auth/storage/recovery、setup-java@v6；无 fallback/replay。
+- 最小验收观测只新增已启动调用计数、每次推理发送次数、恢复完成信号。新增隔离设备存储与冷启动测试，无秘密诊断。
+
+### LOCAL TESTED
+
+源码提交：2befd45329673f17f696ebb8e3a53257334e5da1。离线完整构建退出码 0。
+
+| 检查 | Debug | Release |
+| --- | --- | --- |
+| 完整单元测试 | 104/104，0 failure/error/skip | 104/104，0 failure/error/skip |
+| APK 构建 | PASS | PASS，unsigned |
+| lint | 0 error / 1 UseKtx warning | 0 error / 1 UseKtx warning |
+
+Foundation 34、Transport 6、Security 4、Catalog 33、Inference 27。Android test APK 编译 PASS，包含 5 项测试。10 个实际使用的 Debug/Release/AndroidTest 编译与运行依赖图均按锁解析；两份锁未修改。未宣称所有未使用的工具配置均离线可解析。
+
+Windows 生成目录写权限不一致曾阻止构建；通过本地、不提交的初始化配置，仅迁移生成输出与项目缓存至 ASCII 临时目录后完整重跑。源码、依赖、运行逻辑及签名未因此改变。保留既有构建可恢复副本；没有放宽安全设置。
+
+最终 APK：artifacts/Meldwise-P2-Sprint1-Final-Acceptance.apk；SHA-256：79198B6ECF9DC9F4B6A4AEFEF0EB876A8A633D0DE722A5B354904178BC75074A。AndroidTest APK SHA-256：0B3561777D0FCE18BFD9ABEBC33D98CE6F7D0E50398FAC6E672AD855CB8CC232。签名与设备上的既有验证包一致，可覆盖保留数据。APK 不跟踪、不发布。
+
+### REAL DEVICE TESTED
+
+历史生产目录 PASS（5 visible/5 parsed）；历史推理 PASS（HTTP 200、62 SSE events、文本与 completed、UI Completed），详见两个 diagnostic 报告。它们不是当前 APK 的最终验收替代品。
+
+最终 APK 已覆盖安装并保留数据。vivo V2458A / Android 16 / SDK 36 上四项独立存储 instrumentation PASS（OK (4 tests)，0.367 s）：实际 Keystore/AtomicFile、加密凭据记录回读/损坏拒绝、密钥失败无明文、加密会话重开。数据为合成隔离记录；不是实际账号认证重验，也不是完整 5/5 instrumentation PASS。
+
+冷启动 Activity 测试报告开始但始终未完成，标为 BLOCKED / NOT COMPLETED。只调整 AndroidTest 同步与布尔进度标记，未更改产品逻辑或降低验收条件；实际 Activity 恢复前台/首帧/本地恢复及异步主线程检查均设超时。底层 runner/设备原因仍未确定。主动终止测试后的 Process crashed 输出不可当作应用自发崩溃。普通 COLD 启动返回 ok（663 ms），仍不能代替零请求/凭据恢复验收。
+
+当前测试包 artifacts/Meldwise-P2-Sprint1-AndroidTest-Bounded.apk SHA-256：30988C10810C12F2E5DCAC9E18717BD3F28FAE92C9D2077991D0BA1F4F46085E。正式 APK 未因测试包迭代改变。恢复、最终目录/聊天及单独批准的取消验收待执行，已收到两次聊天测试的明确批准但尚未调用。当前阻塞下停止，不推送声称完成的验收，不提升/合并 PR。
+
+### GITHUB CI VERIFIED
+
+历史 b8dc1af3b92bb8d72cd2a274f20509ff33cb10d2 的 [push CI](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/36976649208) 与 [PR CI](https://github.com/xiaomeng2568/Meldwise-android/actions/runs/36976654511) 均 success。最终集成 HEAD 未推送/未验收；历史 CI 不替代新 HEAD CI。
+
+### KNOWN LIMITATIONS
+
+内部源代码检查未发现新增 HIGH 安全问题；不是独立审计。单账号、单进程、文本 Single Chat；SIWC compatibility 仍为 CONDITIONAL，不是 public production release。
+
+### NOT TESTED
+
+两台物理设备、长时间自然过期、真实提供商旋转期间网络中断、跨进程刷新协调、独立外部安全/合规审计，以及实际断电/OEM 备份行为仍 NOT TESTED。
+
+### DEFERRED TO FUTURE
+
+Sprint 2、API-key provider、DeepSeek、Compare/Collaborate/Debate/Judge、release/tag/Play Store 不在本次范围。[最终验收矩阵与合并门槛](phase-2-sprint-1-final-acceptance.md)。
+
+## 最新证据检查点 — 2026-10-02 19:28
+
+以上最终真机待测条目保留为手动验证前的历史记录，以[当前中文报告](phase-2-sprint-1-current-status-2026-10-02.md)及更新后的最终验收矩阵为准。用户已确认普通重开/强停重开仍已连接；正常聊天 HTTP 200、214 个事件、终态成功、一次发送；19:26 流式输出后取消 HTTP 200、88 个事件、有助手文本、未完成、一次发送、CANCELLED，界面部分回答标记已取消。此前请求重开后记录保留且没有自动继续；新流式取消记录重开后的文本/状态尚未单独取证。
+
+本次只改报告、只读核查 GitHub，没有安装、请求、提交、推送或合并。冷启动自动测试仍未完成，实际进程变化/零启动网络断言仍无完成证据；最新 HEAD 尚未推送，PR #1 仍 Draft，main 未合并。PHASE 2 SPRINT 1 仍 CONDITIONAL，GitHub 事务尚未全部完成。
+
+## 最终开发者验收确认与收尾
+
+开发者现已明确确认：冷重启/重开、离线/断网行为、加密本地持久化及聊天状态恢复，均在测试范围内 PASS。上述行为项的“尚未验收”记录现由这份明确人工确认补齐；冷启动自动测试未完成的事实仍保留，不改写为自动测试成功，不声称 5/5 真机自动测试通过，也不声称进程 ID/网络抓包级证明。
+
+不重复已接受的授权、模型或推理测试。提交已有 AndroidTest/集成/报告修改，等待新 HEAD 的 push 和 pull_request CI 均成功后才推进 PR #1；实际合并 SHA、CI 与最终结论见[最终验收报告](phase-2-sprint-1-final-acceptance.md)。SIWC compatibility 仍 CONDITIONAL，长期未测试项保持不变，不开始 Sprint 2。
