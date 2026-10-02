@@ -1,4 +1,6 @@
-# Production foundation device acceptance — pending
+# Production foundation device acceptance
+
+Historical preparation follows; the SPRINT 1 FINAL ACCEPTANCE section is the current campaign record. Do not interpret pending checks below as evidence already collected.
 
 No Phase 2 authorization, refresh or model request is executed automatically by this delivery. Spike results are historical evidence, not production-code acceptance. Use the fresh production package, not Host A/B. Obtain explicit approval before any real-provider campaign.
 
@@ -26,3 +28,76 @@ No Phase 2 authorization, refresh or model request is executed automatically by 
 - CI execution and independent security/compliance review: pending.
 
 Never collect tokens, authorization code, callback URL, raw host/client/subject IDs, account identity or response bodies in evidence. Stop after an approved batch for review; no automatic release or next sprint.
+
+## SPRINT 1 FINAL ACCEPTANCE
+
+### IMPLEMENTED
+
+Final production APK source: 2befd45329673f17f696ebb8e3a53257334e5da1. Package io.github.xiaomeng2568.meldwise; versionCode 100; versionName 0.3-p2-foundation-sprint1. Device: vivo V2458A, Android 16 / SDK 36. Same debug signing identity, installation uses replacement only, never uninstall/data clear.
+
+### LOCAL TESTED
+
+104 Debug + 104 Release tests PASS; both builds PASS; both lint 0 errors / 1 warning. Five device tests compiled: Keystore/AtomicFile roundtrip, encrypted record roundtrip/corruption, no plaintext on key failure, encrypted journal reopen, actual cold Activity/local restore with zero network starts. Fixture records use separate temporary files/key aliases; genuine records are only read locally. No provider operation is triggered by these tests.
+
+### REAL DEVICE TESTED
+
+Four actual Android storage tests passed on the final production package with isolated synthetic records. Cold Activity instrumentation is blocked/uncompleted; prior catalog/inference PASS remains historical only. Capture only fixed categories/booleans/counts. Never capture conversation screenshots containing prompt/assistant bodies for repository evidence.
+
+| Final acceptance | Current result | Evidence to collect |
+| --- | --- | --- |
+| Keystore/credential/AtomicFile/no plaintext/corruption | PASS within isolated real-storage scope | Four tests, OK (4 tests), 0.367 s |
+| Cold Activity/startup | BLOCKED / NOT COMPLETED | Runner did not return completed result; zero-request/restore assertions not verified |
+| Preserved production credentials | NOT RUN | Connected; local storage readable |
+| Genuine process restart | NOT RUN | Actual process change; Connected; zero startup calls |
+| Force-stop/reopen | NOT RUN | Connected; zero startup calls |
+| Catalog | NOT RUN | 200, body/JSON/models true, visible/parsed >0, no failure |
+| Completed Single Chat | NOT RUN | 200, SSE/text/completed/terminal true, UI Completed, exchanges 1 |
+| Separately approved cancellation | NOT RUN | Cancelled/Incomplete, not Completed, exchanges 1, no replay |
+| Real encrypted journal after restart | NOT RUN | Completed retained, partial truthful, zero automatic continuation |
+
+### Consolidated bounded human/device sequence
+
+1. Allow replacement installation and keep USB authorized. Run local-only instrumentation first. A failure in Keystore/persistence stops the campaign; no provider test may mask it.
+2. Verify cold restoration and genuine process restart, then force-stop/reopen using the final production package. These steps must not press any network button. Preserve credentials. If authentication is not Connected, stop and report the category; only genuinely needed authentication permits one explicit browser flow, never an automatic one.
+3. Once local checks pass, load models once if the memory catalog is empty. Explicitly select a returned model. Stop on any catalog failure; no repeat/fallback.
+4. Send exactly one harmless short prompt for completion. Record only diagnostic status/event/text-presence/terminal categories and exchange count; do not record its body.
+5. With separate human approval, send exactly one bounded streaming request and press Cancel while it is still streaming. Record Cancelled/Incomplete, exchange count 1, completion false. If it finishes before cancellation, record NOT TESTED/INCONCLUSIVE, do not automatically try again.
+6. After evidence is sent, terminate/reopen locally and check encrypted journal states/no automatic requests. Do not send a new provider call for recovery.
+
+No provider controls are operated by automation. No refreshing, repeated requests, model switching/fallback or Phase 1 test packages. A required refresh during an explicitly approved request must be reported accurately rather than hidden; do not force expiry.
+
+### GITHUB CI VERIFIED
+
+Historical b8dc1af push/PR checks succeeded. Final HEAD checks pending; CI does not exercise physical Keystore or substitute for this matrix.
+
+### Current campaign stop
+
+Production APK replacement succeeded and data was preserved. Several AndroidTest-only revisions investigated the non-responsive cold Activity test; product APK stayed unchanged. Full runner starts coldActivityRestoresLocalStateWithoutProviderRequest but does not complete. Progress markers localize the initial stall to the Activity launch path; the underlying device/runner cause is unknown. Lifecycle/first-draw/local-restoration barriers and bounded async main checkpoints remain in the test, not production logic. No criteria removed or artificial PASS used.
+
+Runner abort was deliberate; the emitted `shortMsg=Process crashed.` after force-stop must not be attributed to a spontaneous app crash. Ordinary launch after stopping the test returned Status ok / COLD, 663 ms, but Connected/zero-network/journal-restoration acceptance is still unverified. Current bounded test APK SHA-256: 30988C10810C12F2E5DCAC9E18717BD3F28FAE92C9D2077991D0BA1F4F46085E. Initial four-test storage result used AndroidTest SHA-256 0B3561777D0FCE18BFD9ABEBC33D98CE6F7D0E50398FAC6E672AD855CB8CC232; storage test code is unchanged.
+
+Stop before provider actions. Human's separate approval for one completed chat plus one cancellation request has been received, but neither is executed. Next consolidated human action: report only the visible auth status and whether a system permission/debugging prompt is present; do not authorize, load models, send messages or expose conversation bodies until the local startup blocker is resolved. PR stays Draft; no final acceptance push/merge/branch cleanup.
+
+### KNOWN LIMITATIONS
+
+Cold-start test reads actual records without exposing values. Its network count proves this application's HTTP calls, not a full-device packet audit. Signing compatibility is verified; hardware-backed keys and power-loss guarantees are not claimed.
+
+### NOT TESTED
+
+Two physical devices; long-term natural expiry; real provider network interruption during token rotation; cross-process refresh coordination; independent security/compliance audit; OEM backup/transfer and real power-loss windows.
+
+### DEFERRED TO FUTURE
+
+No additional refresh/revocation campaign, public release or Sprint 2. Promotion/merge is blocked until all required rows pass and both new-HEAD CI triggers succeed.
+
+## LATEST CHECKPOINT — 2026-10-02 19:28 Asia/Shanghai
+
+This section supersedes the earlier pre-manual-test NOT RUN/stop instructions above, without converting unfinished automation to PASS. Developer reports Connected after ordinary close/reopen and force-stop/reopen. Normal chat: HTTP 200, 214 events, completed/assistant text/terminal success true, one exchange, no failure. Earlier pre-response cancellation: one exchange, CANCELLED. New 19:26 mid-stream cancellation: HTTP 200, 88 events, last OUTPUT_TEXT_DELTA, text true, completed/terminal success false, one exchange, CANCELLED, protocol NONE; UI partial output marked Cancelled. No text/identity/credential values are transcribed.
+
+Records retained and no automatic continuation were reported after the earlier cancellation; reopening the newer partial-output record is NOT TESTED. Actual process-change and zero startup HTTP assertions remain INCONCLUSIVE; cold instrumentation remains NOT COMPLETED. No further device/provider operations were performed for this update. PR #1 still Draft/unmerged, final HEAD not pushed; report decision remains CONDITIONAL. See [current status](phase-2-sprint-1-current-status-2026-10-02.md) and [updated matrix](phase-2-sprint-1-final-acceptance.md).
+
+## FINAL DEVELOPER ACCEPTANCE — Sprint 1 closure
+
+The developer has now explicitly confirmed cold restart/reopen, offline/network-disconnected behavior, and encrypted/local persistence/chat state restoration: PASS within tested scope. This supersedes the earlier pending behavioral rows. Evidence is manual developer observation, not a newly completed automation run; no process-ID transcript, packet capture, exact offline error category or new per-message recovery screenshot was supplied. The cold Activity instrumentation remains NOT COMPLETED and is disclosed as an automation limitation, not 5/5 PASS. The four isolated physical Keystore/storage tests remain PASS.
+
+No accepted provider/model/inference tests are repeated. Earlier normal chat and mid-stream cancellation evidence remains valid. Final promotion/merge requires clean production HEAD and both new-HEAD CI triggers successful. Final actual closure status is maintained in [final acceptance](phase-2-sprint-1-final-acceptance.md); SIWC compatibility stays CONDITIONAL.
