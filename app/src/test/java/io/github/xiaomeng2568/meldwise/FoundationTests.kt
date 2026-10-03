@@ -175,7 +175,7 @@ class FoundationTests {
     @Test fun partialJournalRecoversIncompleteWithoutPost() {
         val blob=Blob();val repo=ChatRepository(blob,box());val (id,_)=repo.begin("synthetic input")
         repo.update(id,"synthetic partial",MessageState.STREAMING)
-        val recovered=ChatRepository(blob,box()).load();assertEquals(MessageState.INCOMPLETE,recovered.last().state)
+        val recovered=ChatRepository(blob,box()).load();assertEquals(MessageState.INTERRUPTED,recovered.last().state)
         assertEquals("synthetic partial",recovered.last().text)
         assertEquals(7,java.util.UUID.fromString(recovered.last().id).version())
     }

@@ -52,6 +52,11 @@ class MainActivity:ComponentActivity() {
                 val runs by viewModel.compareHistory.collectAsStateWithLifecycle()
                 val sessions by viewModel.singleHistory.collectAsStateWithLifecycle()
                 val catalogStatus by viewModel.catalogStatus.collectAsStateWithLifecycle()
+                val sharingProvider by viewModel.sharingRequest.collectAsStateWithLifecycle()
+                val conversation by viewModel.conversation.collectAsStateWithLifecycle()
+                val conversationMode by viewModel.conversationMode.collectAsStateWithLifecycle()
+                val collaborateConfig by viewModel.collaborateConfig.collectAsStateWithLifecycle()
+                val collaborateSharing by viewModel.collaborateSharing.collectAsStateWithLifecycle()
                 var configure by remember {mutableStateOf(false)}
                 val actions=remember {
                     ChatActions(viewModel::chooseProvider,viewModel::selectRef,viewModel::loadModels,{
@@ -59,13 +64,18 @@ class MainActivity:ComponentActivity() {
                     },viewModel::disconnect,{configure=true},viewModel::removeApiKey,viewModel::showLegacy,viewModel::send,viewModel::cancel,
                         viewModel::newChat,viewModel::setThinking,{s ->viewModel.startCompare(s.prompt,s.a,s.b,s.pa,s.pb)},
                         viewModel::openSession,viewModel::openCompare,viewModel::clearCompareDraft,
-                        viewModel::deleteHistory,viewModel::moveHistory,viewModel::dismissCatalogNotice)
+                        viewModel::deleteHistory,viewModel::moveHistory,viewModel::dismissCatalogNotice,
+                        viewModel::newCollaborate,viewModel::configureCollaborate,viewModel::retryCollaborate)
                 }
                 ChatScreen(screen,auth,apiState,inference,processing,appearance,{mode ->
                     appearance=mode;preferences.edit {putString("mode",mode.name)}
-                },actions,FoundationState(catalogs,thinking,compare,runs,sessions,catalogStatus),accent,{value ->
+                },actions,FoundationState(catalogs,thinking,compare,runs,sessions,catalogStatus,conversation,conversationMode,collaborateConfig),accent,{value ->
                     accent=value;preferences.edit {if(value==null) remove("accent") else putLong("accent",value)}
                 })
+                sharingProvider?.let {providerId ->
+                    ContextSharingDialog(providerId,viewModel::continueSharing,viewModel::cancelSharing)
+                }
+                collaborateSharing?.let {config ->CollaborateSharingDialog(config,viewModel::continueCollaborateSharing,viewModel::cancelSharing)}
                 if(configure) {
                     // Input stays only in dialog memory, with screenshot protection.
                     var key by remember {mutableStateOf("")}

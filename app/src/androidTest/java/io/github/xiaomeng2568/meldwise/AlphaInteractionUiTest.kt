@@ -33,6 +33,30 @@ class AlphaInteractionUiTest {
     private var moved=0
     private var dismissed:Long?=null
     private var catalogStatus by mutableStateOf(CatalogUiState())
+    @Test fun contextSharingCancelInvokesNoSendAction() {
+        var cancelled=0
+        compose.setContent {MeldwiseTheme {ContextSharingDialog("deepseek",{networkActions++},{cancelled++})}}
+        compose.onNodeWithText("用 DeepSeek 继续聊？").assertExists()
+        compose.onNodeWithText("取消").performClick()
+        compose.runOnIdle {assertEquals(1,cancelled);assertEquals(0,networkActions)}
+    }
+    @Test fun contextSharingHasAnExplicitTargetAndContinueAction() {
+        compose.setContent {MeldwiseTheme {ContextSharingDialog("chatgpt",{networkActions++},{})}}
+        compose.onNodeWithText("用 ChatGPT 继续聊？").assertExists()
+        compose.runOnIdle {assertEquals(0,networkActions)}
+        compose.onNodeWithText("继续").performClick()
+        compose.runOnIdle {assertEquals(1,networkActions)}
+    }
+    @Test fun initialNoticeAnimatesInAndDismissalFinishesExit() {
+        compose.mainClock.autoAdvance=false
+        fixture(CatalogUiState(notices=listOf(CatalogNotice(11,"deepseek",CatalogNoticeKind.Success))))
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("DeepSeek · 模型列表已更新").assertIsDisplayed()
+        compose.onNodeWithContentDescription("关闭加载提示").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("DeepSeek · 模型列表已更新").assertDoesNotExist()
+        compose.runOnIdle {assertEquals(0,networkActions)}
+    }
     private fun fixture(status:CatalogUiState=CatalogUiState(),selected:Boolean=false) {
         catalogStatus=status
         if(selected) picked=ref
@@ -128,10 +152,11 @@ class AlphaInteractionUiTest {
     }
     @Test fun sheetNavigationDoesNotRestartNoticeTimeout() {
         noticeWhileModelSheetOpen(CatalogNoticeKind.Success)
-        compose.mainClock.advanceTimeBy(2000)
-        back();compose.mainClock.advanceTimeBy(500)
+        compose.mainClock.advanceTimeBy(300)
+        back();compose.mainClock.advanceTimeBy(200)
         compose.onNodeWithText("DeepSeek · 模型列表已更新").assertIsDisplayed()
-        compose.mainClock.advanceTimeBy(700)
+        compose.waitUntil(timeoutMillis=2500) {dismissed==9L}
+        compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithText("DeepSeek · 模型列表已更新").assertDoesNotExist()
         compose.runOnIdle {assertEquals(9L,dismissed);assertEquals(0,networkActions)}
     }

@@ -56,8 +56,27 @@ class KeystoreStorageTest {
         val partial=first.begin("synthetic-local-second-input")
         first.update(partial.first,"synthetic-local-partial",MessageState.STREAMING)
         val reopened=repository().load()
-        assertTrue(reopened.size==4 && reopened[1].state==MessageState.COMPLETED && reopened[3].state==MessageState.INCOMPLETE)
+        assertTrue(reopened.size==4 && reopened[1].state==MessageState.COMPLETED && reopened[3].state==MessageState.INTERRUPTED)
         assertFalse(requireNotNull(blob.read()).toString(Charsets.ISO_8859_1).contains("synthetic-local"))
+    }
+    @Test fun oldJournalMigratesOnActualKeystoreWithoutProvider()=isolated("conversation-migration") {blob,key ->
+        val box=AesGcmBox(key::get,"instrumentation-only-conversation")
+        val legacy="""{"version":2,"activeProviderId":"chatgpt","activeModelId":"synthetic","activeSessionId":"legacy","sessions":[{"providerId":"chatgpt","modelId":"synthetic","sessionId":"legacy","messages":[{"id":"u","parentMessageId":null,"role":"USER","text":"synthetic old","state":"COMPLETED"},{"id":"a","parentMessageId":"u","role":"ASSISTANT","text":"synthetic answer","state":"COMPLETED"}]}]}"""
+        blob.write(box.seal(legacy.toByteArray()))
+        val r=ChatRepository(blob,box)
+        assertEquals(2,r.load().size);assertEquals("legacy",r.conversationId())
+        val next=r.begin("synthetic next");r.update(next.first,"next answer",MessageState.COMPLETED)
+        val restored=ChatRepository(blob,box);assertEquals(4,restored.load().size);assertEquals(1,restored.sessions().size)
+        val bytes=blob.read();restored.load();assertArrayEquals(bytes,blob.read())
+    }
+    @Test fun elevenLocalTurnsRestoreAsOneEncryptedConversation()=isolated("conversation-turns") {blob,key ->
+        val box=AesGcmBox(key::get,"instrumentation-only-conversation-turns")
+        val r=ChatRepository(blob,box)
+        repeat(10) {val id=r.begin("synthetic question $it").first;r.update(id,"synthetic answer",MessageState.COMPLETED)}
+        val conversationId=r.conversationId();val restored=ChatRepository(blob,box)
+        assertEquals(20,restored.load().size);val id=restored.begin("synthetic turn 11").first;restored.update(id,"answer 11",MessageState.COMPLETED)
+        assertEquals(conversationId,restored.conversationId());assertEquals(22,restored.load().size);assertEquals(1,restored.sessions().size)
+        assertFalse(blob.read()!!.toString(Charsets.ISO_8859_1).contains("synthetic question"))
     }
     @Test fun actualKeystoreAndAtomicFileRoundTripNoProvider() {
         val context=InstrumentationRegistry.getInstrumentation().targetContext
@@ -77,6 +96,26 @@ class KeystoreStorageTest {
             android.util.AtomicFile(file).delete()
             KeyStore.getInstance("AndroidKeyStore").apply {load(null);deleteEntry(alias)}
         }
+    }
+    @Test fun collaborateStagesRestoreWithActualKeystoreAndNoRequests()=isolated("collaborate") {blob,key ->
+        val box=AesGcmBox(key::get,"instrumentation-only-collaborate")
+        val a=io.github.xiaomeng2568.meldwise.provider.ModelRef("chatgpt","synthetic-a")
+        val b=io.github.xiaomeng2568.meldwise.provider.ModelRef("deepseek","synthetic-b")
+        val r=ChatRepository(blob,box);r.newCollaborate();r.configureCollaborate(CollaborateConfig(CollaborateModel(a),CollaborateModel(b)))
+        val round=r.beginCollaborate(r.prepareCollaborate("synthetic prompt"),true).rounds.single()
+        val initial=r.startCollaborateStage(round.roundId,0).rounds.last().stages[0]
+        r.updateCollaborateStage(round.roundId,initial.copy(state=CollaborateStageState.Complete,output="synthetic visible answer"))
+        val review=r.startCollaborateStage(round.roundId,1).rounds.last().stages[1]
+        r.updateCollaborateStage(round.roundId,review.copy(output="synthetic partial review"))
+        val restored=ChatRepository(blob,box);restored.load()
+        val recovered=restored.activeConversation()!!.rounds.single()
+        assertEquals(CollaborateRoundState.Interrupted,recovered.lifecycle)
+        assertEquals(CollaborateStageState.Complete,recovered.stages[0].state)
+        assertEquals("synthetic visible answer",recovered.stages[0].output)
+        assertEquals(CollaborateStageState.Interrupted,recovered.stages[1].state)
+        assertEquals(CollaborateStageState.NotRun,recovered.stages[2].state)
+        assertEquals(1,restored.sessions().size)
+        assertFalse(blob.read()!!.toString(Charsets.ISO_8859_1).contains("synthetic visible"))
     }
     @Test fun deepseekKeyReplaceRemoveAndCorruptionNoProvider()=isolated("deepseek") {blob,key ->
         fun store()=DeepSeekCredentials(blob,AesGcmBox(key::get,"instrumentation-only-deepseek"))

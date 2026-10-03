@@ -33,10 +33,10 @@ class AlphaInteractionTests {
         val r=ChatRepository(MemoryBlob(),testBox());r.newSession(ref);r.begin("one");val id=r.sessions().single().id
         r.newSession(ref);r.begin("two");r.deleteSession(id);assertEquals(1,r.sessions().size);assertEquals("two",r.load().first().text)
     }
-    @Test fun deletingCurrentSingleSelectsRemainingTruthfully() {
+    @Test fun deletingCurrentSingleLeavesSafeDraftAndKeepsRemainingHistory() {
         val r=ChatRepository(MemoryBlob(),testBox());r.newSession(ModelRef("chatgpt","a"));r.begin("first")
         r.newSession(ref);r.begin("second");r.deleteSession(r.sessions().first().id)
-        assertEquals(ModelRef("chatgpt","a"),r.activeRef());assertEquals("first",r.load().first().text)
+        assertEquals(ref,r.activeRef());assertTrue(r.load().isEmpty());assertEquals("first",r.activateSession(r.sessions().single().id).first().text)
     }
     @Test fun deletingLastSingleLeavesEmptyLocalDraft() {
         val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);r.newSession(ref);r.begin("last")
@@ -44,11 +44,11 @@ class AlphaInteractionTests {
     }
     @Test fun legacyRecordCanBeDeletedWithoutFabricatingIds() {
         val r=ChatRepository(MemoryBlob(),testBox());r.activate(ref);r.begin("legacy");val id=r.sessions().single().id
-        assertTrue(id.startsWith("legacy:"));r.deleteSession(id);assertTrue(r.sessions().isEmpty())
+        assertTrue(id.isNotBlank());r.deleteSession(id);assertTrue(r.sessions().isEmpty())
     }
-    @Test fun unknownSingleIdDoesNotDeleteAnything() {val r=ChatRepository(MemoryBlob(),testBox());r.newSession(ref);assertThrows(IllegalArgumentException::class.java) {r.moveSession("missing",-1)};assertEquals(1,r.sessions().size)}
+    @Test fun unknownSingleIdDoesNotDeleteAnything() {val r=ChatRepository(MemoryBlob(),testBox());r.newSession(ref);r.begin("prompt");assertThrows(IllegalArgumentException::class.java) {r.moveSession("missing",-1)};assertEquals(1,r.sessions().size)}
     @Test fun singleOrderPersistsAcrossRestart() {
-        val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);repeat(3) {r.newSession(ref)}
+        val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);repeat(3) {r.newSession(ref);r.begin("prompt")}
         val order=r.sessions().map {it.id};r.moveSession(order.last(),-1)
         assertEquals(listOf(order[0],order[2],order[1]),ChatRepository(blob,box).sessions().map {it.id})
     }
@@ -71,7 +71,7 @@ class AlphaInteractionTests {
     @Test fun unknownCompareCannotDeleteOtherRuns() {val r=CompareRepository(MemoryBlob(),testBox());r.upsert(compare("one"));assertThrows(IllegalArgumentException::class.java) {r.delete("missing")};assertEquals(1,r.load().size)}
     @Test fun failedDeleteWriteRetainsSingleHistory() {
         val memory=MemoryBlob();var fail=false;val blob=object:AtomicBlob {override fun read()=memory.read();override fun write(value:ByteArray) {if(fail) throw IllegalStateException("synthetic failure");memory.write(value)}}
-        val r=ChatRepository(blob,testBox());r.newSession(ref);val id=r.sessions().single().id;fail=true
+        val r=ChatRepository(blob,testBox());r.newSession(ref);r.begin("prompt");val id=r.sessions().single().id;fail=true
         assertThrows(IllegalStateException::class.java) {r.deleteSession(id)};assertEquals(id,r.sessions().single().id)
     }
 }

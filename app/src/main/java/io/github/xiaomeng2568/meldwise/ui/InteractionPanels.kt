@@ -1,6 +1,8 @@
 package io.github.xiaomeng2568.meldwise.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -18,19 +21,64 @@ import androidx.compose.ui.window.PopupProperties
 import io.github.xiaomeng2568.meldwise.ui.components.*
 import io.github.xiaomeng2568.meldwise.data.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
+import io.github.xiaomeng2568.meldwise.ui.presentation.*
 
-@Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit) {
+@Composable internal fun ContextSharingDialog(providerId:String,onContinue:()->Unit,onCancel:()->Unit) {
+    val name=providerLabel(providerId)
+    AlertDialog(onDismissRequest=onCancel,
+        title={Text("用 $name 继续聊？")},
+        text={Text("继续会把这段对话中选入上下文的消息和回答发给 $name。思考过程只留在本机。这个选择只用于当前对话。")},
+        confirmButton={TextButton(onClick=onContinue) {Text("继续")}},
+        dismissButton={TextButton(onClick=onCancel) {Text("取消")}})
+}
+
+@Composable internal fun CollaborateSharingDialog(config:CollaborateConfig,onContinue:()->Unit,onCancel:()->Unit) {
+    val names=config.providers.sorted().joinToString("、") {providerLabel(it)}
+    AlertDialog(onDismissRequest=onCancel,title={Text("让 $names 一起协作？")},
+        text={Text("协作会把选入上下文的消息，以及参与模型的可见回答发给所选服务商，用于审阅和综合。思考过程只留在本机。这个选择只用于当前对话和这组服务商。")},
+        confirmButton={TextButton(onClick=onContinue) {Text("继续")}},dismissButton={TextButton(onClick=onCancel) {Text("取消")}})
+}
+
+@Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit,onCollaborate:()->Unit={},selected:HistoryCategory?=null) {
     PanelColumn("开始") {
-        ModeRow("对话","和一个模型聊聊",Glyph.Chat,enabled,onSingle)
-        ModeRow("对比","看看两个模型怎么回答",Glyph.Compare,enabled,onCompare)
-        ModeRow("辩论","暂未开放",Glyph.More,false,{})
+        HistoryCategory.entries.forEach {mode ->ModeRow(mode,mode.description,enabled && mode.available,
+            onClick=when(mode) {HistoryCategory.Chat->onSingle;HistoryCategory.Compare->onCompare
+                HistoryCategory.Collaborate->onCollaborate;HistoryCategory.Debate->({})},selected=selected==mode)}
     }
 }
-@Composable private fun ModeRow(title:String,subtitle:String,glyph:Glyph,enabled:Boolean,onClick:()->Unit) {
-    Surface(onClick=onClick,enabled=enabled,shape=Radius.bubble,color=MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(Modifier.fillMaxWidth().padding(Space.section),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.content)) {
-            MeldwiseIcon(glyph)
-            Column(Modifier.weight(1f)) {Text(title,style=MaterialTheme.typography.titleMedium);Text(subtitle,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+@Composable private fun ModeRow(mode:HistoryCategory,subtitle:String,enabled:Boolean,onClick:()->Unit,
+    selected:Boolean=false,forward:Boolean=false) {
+    val colors=MaterialTheme.colorScheme
+    Surface(onClick=onClick,enabled=enabled,shape=Radius.bubble,
+        color=if(selected) colors.primaryContainer else colors.surfaceContainerLow,
+        modifier=Modifier.testTag("modeRow-${mode.name}").semantics {this.selected=selected}) {
+        Row(Modifier.fillMaxWidth().heightIn(min=Sizes.modeRowMin).padding(Space.section),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.content)) {
+            CompositionLocalProvider(LocalContentColor provides if(enabled) colors.primary else colors.onSurfaceVariant.copy(alpha=.45f)) {
+                val glyph=when(mode) {HistoryCategory.Chat->Glyph.Chat;HistoryCategory.Compare->Glyph.Compare
+                    HistoryCategory.Collaborate->Glyph.Collaborate;HistoryCategory.Debate->Glyph.Debate}
+                MeldwiseIcon(glyph,Modifier.testTag("modeIcon-${mode.name}"))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(mode.title,style=MaterialTheme.typography.titleMedium,color=if(enabled) colors.onSurface else colors.onSurfaceVariant)
+                Text(subtitle,style=MaterialTheme.typography.bodySmall,color=colors.onSurfaceVariant)
+            }
+            if(forward && mode.available) MeldwiseIcon(Glyph.Forward)
+            else if(selected) MeldwiseIcon(Glyph.Check)
+        }
+    }
+}
+@Composable internal fun HistoryPanel(category:HistoryCategory?,sessions:List<SingleSessionInfo>,runs:List<CompareRun>,busy:Boolean,
+    onCategory:(HistoryCategory)->Unit,onOpen:(HistoryEntry)->Unit,onDelete:(HistoryEntry)->Unit,onMove:(HistoryEntry,Int)->Unit) {
+    PanelColumn(category?.title ?: "历史") {
+        if(category==null) historySummaries(sessions,runs).forEach {summary ->
+            ModeRow(summary.category,summary.label,!busy && summary.category.available,{onCategory(summary.category)},forward=true)
+        } else {
+            val entries=historyEntries(category,sessions,runs)
+            if(entries.isEmpty()) Text("还没有记录",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            entries.forEachIndexed {index,entry ->key(entry.id) {
+                HistoryRow(entry.title,entry.subtitle,busy,index>0,index<entries.lastIndex,
+                    {onOpen(entry)},{onDelete(entry)},{onMove(entry,it)})
+            }}
         }
     }
 }
@@ -55,7 +103,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
 @OptIn(ExperimentalAnimationApi::class)
 @Composable internal fun CatalogBanner(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit,modifier:Modifier=Modifier) {
     AnimatedContent(targetState=notice,modifier=modifier.widthIn(max=Sizes.noticeMax),label="catalogNotice",
-        transitionSpec={(slideInHorizontally {width ->-width}+fadeIn()) togetherWith fadeOut()}) {current ->
+        transitionSpec={(slideInHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {width ->-width/8}+fadeIn(tween(Motion.fadeInMs))) togetherWith fadeOut(tween(Motion.fadeOutMs))}) {current ->
         if(current!=null) {
             val tones=noticeColors(current.kind)
             Surface(shape=Radius.surface,color=tones.first,border=BorderStroke(Sizes.noticeBorder,tones.second),
@@ -75,7 +123,11 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
 }
 /** Attach to the active window (chat or modal sheet) so the sheet cannot cover the notice. */
 @Composable internal fun CatalogNoticeOverlay(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit) {
-    if(notice==null) return
+    val visible=remember {MutableTransitionState(false)}
+    var retained by remember {mutableStateOf<CatalogNotice?>(null)}
+    if(notice!=null) retained=notice
+    visible.targetState=notice!=null
+    if(!visible.currentState && !visible.targetState && visible.isIdle) return
     val density=LocalDensity.current
     val margin=with(density) {Space.content.roundToPx()}
     val top=WindowInsets.safeDrawing.getTop(density)+margin
@@ -85,8 +137,12 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
                 top.coerceAtMost((windowSize.height-popupContentSize.height).coerceAtLeast(0)))
     }}
     Popup(popupPositionProvider=position,
-        properties=PopupProperties(focusable=false,dismissOnBackPress=false,dismissOnClickOutside=false)) {
-        CatalogBanner(notice,onDismiss,onDetails,Modifier.padding(end=Space.content))
+        properties=PopupProperties(focusable=false,dismissOnBackPress=false,dismissOnClickOutside=false,clippingEnabled=false)) {
+        AnimatedVisibility(visibleState=visible,
+            enter=slideInHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {-margin*2}+fadeIn(tween(Motion.fadeInMs)),
+            exit=slideOutHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {-margin}+fadeOut(tween(Motion.fadeOutMs))) {
+            CatalogBanner(retained,onDismiss,onDetails,Modifier.padding(end=Space.content))
+        }
     }
 }
 @Composable internal fun CatalogDetails(notice:CatalogNotice) {

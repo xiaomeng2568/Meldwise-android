@@ -111,23 +111,28 @@ class SecondProviderFoundationTests {
         val restored=ChatRepository(blob,box);assertEquals(ModelRef("deepseek","catalog-model"),restored.activeRef())
         assertEquals(2,restored.load().size);assertEquals(MessageState.COMPLETED,restored.load().last().state)
     }
-    @Test fun providerSwitchDoesNotMixHistory() {
+    @Test fun providerSwitchNeedsConversationLocalConsent() {
         val repo=ChatRepository(MemoryBlob(),testBox())
         repo.activate(ModelRef("chatgpt","same"));val (a,_)=repo.begin("synthetic private chatgpt")
         repo.update(a,"synthetic reply",MessageState.COMPLETED)
-        repo.activate(ModelRef("deepseek","same"));val (_,history)=repo.begin("synthetic deepseek")
-        assertEquals(1,history.size);assertEquals("synthetic deepseek",history.single().text)
-        assertEquals(2,repo.activate(ModelRef("chatgpt","same")).size)
+        repo.activate(ModelRef("deepseek","same"));val turn=repo.prepare("synthetic deepseek")
+        assertTrue(turn.requiresSharing)
+        assertThrows(ContextSharingRequired::class.java) {repo.beginPrepared(turn)}
+        assertEquals(2,repo.load().size)
+        assertEquals(3,repo.beginPrepared(turn,true).second.size)
     }
-    @Test fun modelSwitchDoesNotReassignExistingSession() {
-        val repo=ChatRepository(MemoryBlob(),testBox());repo.activate(ModelRef("deepseek","first"));repo.begin("synthetic first")
-        assertTrue(repo.activate(ModelRef("deepseek","second")).isEmpty())
-        assertEquals(2,repo.activate(ModelRef("deepseek","first")).size)
+    @Test fun modelSwitchPreservesConversationAndOutputSnapshot() {
+        val repo=ChatRepository(MemoryBlob(),testBox());val first=ModelRef("deepseek","first")
+        repo.activate(first);val (id,_)=repo.begin("synthetic first");repo.update(id,"answer",MessageState.COMPLETED)
+        assertEquals(2,repo.activate(ModelRef("deepseek","second")).size)
+        assertEquals(first,repo.load().last().modelRef)
+        assertEquals(3,repo.begin("next").second.size)
+        assertEquals(1,repo.sessions().size)
     }
     @Test fun incompleteSessionRestoresTruthfully() {
         val blob=MemoryBlob();val box=testBox();val repo=ChatRepository(blob,box)
         repo.activate(ModelRef("deepseek","m"));repo.begin("synthetic")
-        assertEquals(MessageState.INCOMPLETE,ChatRepository(blob,box).load().last().state)
+        assertEquals(MessageState.INTERRUPTED,ChatRepository(blob,box).load().last().state)
     }
     @Test fun missingCredentialRetainsHistoryAndBlocksAdmission()=runBlocking {
         val blob=MemoryBlob();val box=testBox();val repo=ChatRepository(blob,box)

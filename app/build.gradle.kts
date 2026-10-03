@@ -25,10 +25,10 @@ android {
         applicationId = "io.github.xiaomeng2568.meldwise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 205
-        versionName = "0.1.0-alpha.2"
+        versionCode = 209
+        versionName = "0.2.0-alpha.1"
         manifestPlaceholders["appLabel"] = "Meldwise"
-        resValue("string", "public_alpha_version", "0.1.0 Alpha 2")
+        resValue("string", "public_alpha_version", "0.2.0 Alpha 1")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

@@ -29,8 +29,11 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
 }
 @Composable fun MessageCard(message:ChatMessage,ref:ModelRef,name:String,seconds:Long?=null,onDetails:()->Unit={}) {
     if(message.role==MessageRole.USER) UserPrompt(message.text,messageStateCaption(message.state))
-    else AssistantOutput(CompareLane(ref,name,laneState(message.state),message.text,reasoningPresentation(message.reasoning),seconds),
-        onDetails=onDetails)
+    else {
+        val snapshot=message.modelRef ?: ref
+        AssistantOutput(CompareLane(snapshot,message.modelDisplayName ?: message.modelRef?.modelId ?: name,
+            laneState(message.state),message.text,reasoningPresentation(message.reasoning),seconds),onDetails=onDetails)
+    }
 }
 /** Shared free-flowing answer for Single and Compare. No result-card shell. */
 @Composable fun AssistantOutput(lane:CompareLane,modifier:Modifier=Modifier,onDetails:(()->Unit)?=null) {
@@ -47,7 +50,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
         ReasoningPanel(lane.reasoning)
         ContentRenderer(remember(lane.answer) {ContentParser.parse(lane.answer)})
         if(lane.answer.isNotEmpty()) MessageActions(lane.answer)
-        if(onDetails!=null && lane.state in setOf(LaneState.Failed,LaneState.Incomplete)) TextButton(onClick=onDetails) {Text("查看详情")}
+        if(onDetails!=null && lane.state in setOf(LaneState.Failed,LaneState.Incomplete,LaneState.Interrupted)) TextButton(onClick=onDetails) {Text("查看详情")}
     }
 }
 @Composable private fun MessageActions(text:String) {

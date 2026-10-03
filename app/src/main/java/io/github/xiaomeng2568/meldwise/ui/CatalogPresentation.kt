@@ -6,6 +6,14 @@ import io.github.xiaomeng2568.meldwise.network.CatalogProtocol
 import io.github.xiaomeng2568.meldwise.network.TransportCategory
 import io.github.xiaomeng2568.meldwise.provider.ErrorKind
 import io.github.xiaomeng2568.meldwise.ui.presentation.providerLabel
+import io.github.xiaomeng2568.meldwise.ui.theme.Motion
+import kotlinx.coroutines.delay
+
+/** One cancellable UI lifetime per notice ID, independent of the current sheet/page. */
+internal suspend fun autoDismissCatalogNotice(id:Long,onDismiss:(Long)->Unit) {
+    delay(Motion.noticeLifetimeMs)
+    onDismiss(id)
+}
 
 val CatalogNotice.title: String
     get() = if (kind == CatalogNoticeKind.Warning) "模型缓存暂不可用" else

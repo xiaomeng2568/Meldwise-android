@@ -12,17 +12,17 @@ import io.github.xiaomeng2568.meldwise.data.ComparePromptItem
 import io.github.xiaomeng2568.meldwise.ui.modelLabel
 import io.github.xiaomeng2568.meldwise.ui.content.*
 
-enum class LaneState { Pending, Waiting, Thinking, Streaming, Completed, Cancelled, Incomplete, Failed }
+enum class LaneState { Pending, Waiting, Thinking, Streaming, Completed, Cancelled, Incomplete, Failed, Interrupted }
 fun laneState(state: MessageState): LaneState = when(state) {
     MessageState.PENDING -> LaneState.Pending; MessageState.STREAMING -> LaneState.Streaming
     MessageState.COMPLETED -> LaneState.Completed; MessageState.CANCELLED -> LaneState.Cancelled
-    MessageState.INCOMPLETE -> LaneState.Incomplete; MessageState.FAILED -> LaneState.Failed
+    MessageState.INCOMPLETE -> LaneState.Incomplete;MessageState.INTERRUPTED -> LaneState.Interrupted; MessageState.FAILED -> LaneState.Failed
 }
 fun laneLabel(state: LaneState): String = when(state) {
     LaneState.Pending -> "等待回答"; LaneState.Waiting -> "正在处理…"; LaneState.Thinking -> "正在思考…"; LaneState.Streaming -> "正在回答…"
-    LaneState.Completed -> "已完成"; LaneState.Cancelled -> "已取消"; LaneState.Incomplete -> "回答未完成"; LaneState.Failed -> "请求失败"
+    LaneState.Completed -> "已完成"; LaneState.Cancelled -> "已取消"; LaneState.Incomplete -> "回答未完成"; LaneState.Failed -> "请求失败";LaneState.Interrupted -> "上次回答已中断"
 }
-fun messageStateCaption(state: MessageState): String? = if (state == MessageState.COMPLETED) null else laneLabel(laneState(state))
+fun messageStateCaption(state: MessageState): String? = if(state==MessageState.INTERRUPTED) "上次回答已中断" else if (state == MessageState.COMPLETED) null else laneLabel(laneState(state))
 fun providerLabel(id: String): String = when(id) {
     ProviderIds.CHATGPT -> "ChatGPT"; ProviderIds.DEEPSEEK -> "DeepSeek"; else -> "未知提供方"
 }
@@ -33,7 +33,7 @@ class MessagePresentation(val user: Boolean, val metadata: String?, val stateCap
 fun presentMessage(message: ChatMessage, ref: ModelRef, name: String,
     reasoning: ReasoningSummary = ReasoningSummary()): MessagePresentation = MessagePresentation(
     message.role == MessageRole.USER,
-    if (message.role == MessageRole.USER) null else modelLabel(ref, name), messageStateCaption(message.state),
+    if (message.role == MessageRole.USER) null else modelLabel(message.modelRef ?: ref, message.modelDisplayName ?: message.modelRef?.modelId ?: name), messageStateCaption(message.state),
     if (message.role == MessageRole.USER) ParsedContent(listOf(PlainTextBlock(message.text)), false)
         else ContentParser.parse(message.text), reasoning)
 class CompareLane(val ref: ModelRef, val displayName: String, val state: LaneState,

@@ -27,11 +27,12 @@ fun errorLabel(code:String):String = when(code) {
     "AUTH_UNAVAILABLE"->"暂时无法登录"
     "MODEL_CATALOG_UNAVAILABLE"->"暂时无法加载模型列表"
     "LOCAL_STORAGE_OR_STREAM_FAILURE"->"本机存储或回答传输失败"
+    "LEGACY_HISTORY_UNAVAILABLE"->"没有找到旧版记录，可以在历史里查看已有对话"
     else->"操作失败"
 }
 
 fun roleLabel(role:String):String = when(role) { "USER"->"你";"ASSISTANT"->"助手";"SYSTEM"->"系统";else->"消息" }
 fun messageStateLabel(state:String):String = when(state) {
     "STREAMING"->"接收中";"COMPLETED"->"已完成";"INCOMPLETE"->"不完整";"FAILED"->"失败"
-    "CANCELLED"->"已取消";else->"已保存"
+    "CANCELLED"->"已取消";"INTERRUPTED"->"已中断";else->"已保存"
 }
