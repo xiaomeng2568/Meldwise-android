@@ -47,9 +47,11 @@ Collaborate、Debate、工具调用、图片输入和 OpenAI API Key 接入留�
 
 ## 项目说明
 
-Meldwise 是社区开发的非官方客户端，与服务商没有隶属或赞助关系。使用时请遵守服务商条款。服务商名称和图标归各自权利人所有，仅用于标识接入来源。
+服务商名称、商标及其他品牌标识归各自权利人所有。Meldwise 仅在必要范围内使用相关名称来识别或描述对应的服务集成。除非权利人另有明确许可，第三方品牌标识不属于 Meldwise 的 GPL-3.0-only 授权范围。Meldwise 是独立的社区项目，与相关服务商不存在隶属、赞助或背书关系。使用时请遵守服务商条款。
 
-源码采用 MPL-2.0 许可证。
+本项目自 `v0.1.0-alpha.2` 起采用 GNU General Public License v3.0 only（`GPL-3.0-only`）发布，完整文本见 [LICENSE](LICENSE)。`v0.1.0-alpha.1` 及其对应源码仍按原始 MPL-2.0 许可提供；本次变更不会撤销先前已经授予的权利。
+
+第三方组件继续遵循各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。正式 APK 附有许可文本和声明，对应源码与构建脚本可从同版本 Git 标签取得。你可以自行构建，并使用自己的密钥签名；官方签名私钥保持私有。
 
 ---
 
@@ -98,4 +100,8 @@ Use JDK 17, Android SDK 35 and Gradle 8.13. Keep project and SDK paths ASCII and
 
 Dependencies resolve through Google and Maven Central. Debug uses a separate UI Preview installation; Release uses `io.github.xiaomeng2568.meldwise`. Keep local configuration, signing material and build artifacts outside version control.
 
-Meldwise is an unofficial community project, unaffiliated with its providers. Provider names and icons belong to their respective owners and identify service integrations. Use is subject to provider terms. Source is licensed under MPL-2.0.
+Provider names, trademarks, and other brand identifiers are the property of their respective owners. Meldwise uses provider names only as necessary to identify or describe the corresponding service integrations. Unless separately licensed by their respective owners, third-party brand identifiers are not covered by Meldwise's GPL-3.0-only license. Meldwise is an independent community project and is not affiliated with, sponsored by, or endorsed by the referenced providers. Use is subject to provider terms.
+
+Starting with `v0.1.0-alpha.2`, Meldwise is distributed under the GNU General Public License v3.0 only (`GPL-3.0-only`); see [LICENSE](LICENSE). `v0.1.0-alpha.1` and its corresponding source remain available under their original MPL-2.0 terms. This change does not revoke rights already granted for prior releases.
+
+Third-party components retain their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The APK includes license texts and notices. Corresponding source and build scripts are available at the matching Git tag. Recipients can rebuild and sign with their own key; the official private signing key remains private.
