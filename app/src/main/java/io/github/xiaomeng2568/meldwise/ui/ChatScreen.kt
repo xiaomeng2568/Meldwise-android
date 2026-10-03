@@ -26,6 +26,7 @@ import io.github.xiaomeng2568.meldwise.ui.components.*
 import io.github.xiaomeng2568.meldwise.ui.content.*
 import io.github.xiaomeng2568.meldwise.ui.presentation.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
+import kotlinx.coroutines.delay
 
 /** All effects belong to the owner; UI carries stable IDs and callbacks only. */
 class ChatActions(val chooseProvider: (String)->Unit, val selectModel: (ModelRef)->Unit,
@@ -49,6 +50,12 @@ private typealias Panel = ChatPanel
     var navigation by remember {mutableStateOf(ChatNavigation())}
     val panel=navigation.panel
     var noticeDetails by remember {mutableStateOf<CatalogNotice?>(null)}
+    val catalogNotice=foundation.catalogStatus.notices.firstOrNull()
+    // Keep the lifetime independent of switching the active chat/sheet popup host.
+    LaunchedEffect(catalogNotice?.id) {catalogNotice?.let {delay(3500);actions.dismissNotice(it.id)}}
+    val showCatalogDetails:(CatalogNotice)->Unit={notice ->
+        noticeDetails=notice;navigation=navigation.open(Panel.Diagnostics);actions.dismissNotice(notice.id)
+    }
     var input by remember {mutableStateOf("")}
     val compareMode=navigation.compareMode
     var pickingLane by remember {mutableStateOf<String?>(null)}
@@ -157,9 +164,7 @@ private typealias Panel = ChatPanel
             }
         }
     }
-    CatalogBanner(foundation.catalogStatus.notices.firstOrNull(),actions.dismissNotice,{notice ->
-        noticeDetails=notice;navigation=navigation.open(Panel.Diagnostics);actions.dismissNotice(notice.id)
-    },Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(Space.content))
+    if(panel==Panel.None) CatalogNoticeOverlay(catalogNotice,actions.dismissNotice,showCatalogDetails)
     }
     if(panel!=Panel.None) {
         val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
@@ -226,6 +231,7 @@ private typealias Panel = ChatPanel
                     onCompare={input="";actions.newCompare();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;navigation=navigation.selectMode(true)})
                 Panel.None -> Unit
             }
+            CatalogNoticeOverlay(catalogNotice,actions.dismissNotice,showCatalogDetails)
         }
     }
 }

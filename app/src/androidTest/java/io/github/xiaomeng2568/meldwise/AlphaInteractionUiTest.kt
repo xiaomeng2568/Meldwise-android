@@ -32,14 +32,16 @@ class AlphaInteractionUiTest {
     private var deleted=false
     private var moved=0
     private var dismissed:Long?=null
+    private var catalogStatus by mutableStateOf(CatalogUiState())
     private fun fixture(status:CatalogUiState=CatalogUiState(),selected:Boolean=false) {
+        catalogStatus=status
         if(selected) picked=ref
         val actions=ChatActions({},{picked=it},{networkActions++},{networkActions++},{},{},{},{},{networkActions++},{},
-            thinking={effort=it},compare={networkActions++},dismissNotice={dismissed=it})
+            thinking={effort=it},compare={networkActions++},dismissNotice={dismissed=it;catalogStatus=catalogStatus.copy(notices=catalogStatus.notices.filterNot {n->n.id==it})})
         compose.setContent {MeldwiseTheme {
             ChatScreen(ScreenState(providerId="deepseek",ready=true,models=listOf(model),selected=picked,historyRef=ref),
                 AuthState.Disconnected,ApiKeyState.CONFIGURED,null,ProcessingTime(null,null,false),Appearance.System,{},actions,
-                FoundationState(catalogs=mapOf("deepseek" to listOf(model)),thinking=effort,catalogStatus=status))
+                FoundationState(catalogs=mapOf("deepseek" to listOf(model)),thinking=effort,catalogStatus=catalogStatus))
         }}
     }
     private fun back() {InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);compose.waitForIdle()}
@@ -91,5 +93,46 @@ class AlphaInteractionUiTest {
         compose.runOnIdle {assertEquals(-1,moved);assertFalse(deleted)}
         compose.onNodeWithContentDescription("记录操作").performClick();compose.onNodeWithText("删除").performClick()
         compose.runOnIdle {assertTrue(deleted);assertEquals(0,networkActions)}
+    }
+    private fun noticeWhileModelSheetOpen(kind:CatalogNoticeKind) {
+        compose.mainClock.autoAdvance=false
+        fixture();compose.onNodeWithText("DeepSeek-synthetic").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.runOnIdle {catalogStatus=CatalogUiState(notices=listOf(CatalogNotice(9,"deepseek",kind,
+            if(kind==CatalogNoticeKind.Failure) ErrorKind.AUTHORIZATION else null,
+            if(kind==CatalogNoticeKind.Failure) ModelCatalogDiagnostic(httpStatus=403) else null)))}
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNode(isPopup()).assertExists()
+    }
+    @Test fun successNoticeFloatsAboveOpenModelSheetWithoutDismissingIt() {
+        noticeWhileModelSheetOpen(CatalogNoticeKind.Success)
+        compose.onNodeWithText("DeepSeek · 模型列表已更新").assertIsDisplayed()
+        compose.onNodeWithContentDescription("关闭加载提示").performClick()
+        compose.onNodeWithText("选择模型").assertIsDisplayed()
+        compose.runOnIdle {assertEquals(9L,dismissed);assertEquals(0,networkActions)}
+    }
+    @Test fun failureNoticeAboveModelSheetOpensSanitizedDetails() {
+        noticeWhileModelSheetOpen(CatalogNoticeKind.Failure)
+        compose.onNodeWithText("HTTP 403 · 权限不足").assertIsDisplayed().performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("模型加载详情").assertIsDisplayed()
+        compose.onNodeWithText("providerId=deepseek").assertExists()
+        compose.runOnIdle {assertEquals(9L,dismissed);assertEquals(0,networkActions)}
+    }
+    @Test fun warningNoticeFloatsAboveModelSheet() {
+        noticeWhileModelSheetOpen(CatalogNoticeKind.Warning)
+        compose.onNodeWithText("模型缓存暂不可用").assertIsDisplayed()
+        compose.onNodeWithText("关闭").performClick()
+        compose.onNodeWithText("选择模型").assertIsDisplayed()
+        compose.runOnIdle {assertEquals(0,networkActions)}
+    }
+    @Test fun sheetNavigationDoesNotRestartNoticeTimeout() {
+        noticeWhileModelSheetOpen(CatalogNoticeKind.Success)
+        compose.mainClock.advanceTimeBy(2000)
+        back();compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("DeepSeek · 模型列表已更新").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithText("DeepSeek · 模型列表已更新").assertDoesNotExist()
+        compose.runOnIdle {assertEquals(9L,dismissed);assertEquals(0,networkActions)}
     }
 }

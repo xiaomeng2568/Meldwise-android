@@ -5,6 +5,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 dependencyLocking { lockAllConfigurations() }
+// Package only public legal files, never the repository or local signing configuration.
+val prepareLegalAssets by tasks.registering(Sync::class) {
+    from(rootProject.file("LICENSE"), rootProject.file("THIRD_PARTY_NOTICES.md"))
+    into(layout.buildDirectory.dir("generated/legalAssets"))
+}
 // Optional local signing. CI without these user-level properties builds unsigned Release APKs.
 val releaseSigningInputs = listOf(
     "MELDWISE_RELEASE_STORE_FILE",
@@ -27,6 +32,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
+    sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/legalAssets"))
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     signingConfigs {
@@ -53,6 +59,8 @@ android {
     }
     testOptions { unitTests.all { it.systemProperty("projectRoot", rootDir.absolutePath) } }
 }
+tasks.named("preBuild").configure { dependsOn(prepareLegalAssets) }
+
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -63,7 +63,7 @@ class FlatCompareVisualTest {
     @Test fun lightFlatFlowCollapsed() {
         fixture();compose.onNodeWithText("你好").assertExists();compose.onNodeWithText("ChatGPT-5.6-Luna").assertExists()
         compose.onNodeWithText("DeepSeek-V4.1-Flash").assertExists();compose.onAllNodesWithTag("assistantOutput").assertCountEquals(2)
-        compose.onNodeWithContentDescription("ChatGPT 提供方").assertExists();compose.onNodeWithContentDescription("DeepSeek 提供方").assertExists()
+        compose.onNodeWithContentDescription("ChatGPT 提供方").assertDoesNotExist();compose.onNodeWithContentDescription("DeepSeek 提供方").assertDoesNotExist()
         compose.onAllNodesWithTag("reasoningDisclosure").assertCountEquals(1);compose.onNodeWithText("查看思考过程").assertExists()
         compose.onNodeWithTag("composer").assertHeightIsEqualTo(48.dp);compose.onNodeWithTag("composerSurface",true).assertHeightIsEqualTo(44.dp)
         capture("01-compare-light-collapsed")

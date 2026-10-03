@@ -71,14 +71,14 @@ class FlatCompareTests {
     @Test fun formalMessageToStringIsRedacted() {listOf(run(),run().userPrompt,a,b,compareMessageItems(run())[1]).forEach {val text=it.toString();assertFalse(text.contains("PRIVATE"));assertFalse(text.contains("5.6-Luna"))}}
     @Test fun compareNoLongerRendersAnOuterCard() {val root=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui");val screen=File(root,"ChatScreen.kt").readText();assertTrue(screen.contains("items(compareItems,key={it.key}) {CompareMessage(it)}"));assertFalse(screen.contains("CompareContent(it,foundation.catalogs)"))}
     @Test fun reasoningIsLightDisclosureNotCodeSurface() {val text=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui/components/ContentRenderer.kt").readText().substringAfter("@Composable fun ReasoningPanel");assertFalse(text.contains("LiteralSurface"));assertTrue(text.contains("mutableStateOf(false)"));assertTrue(text.contains("收起"))}
-    @Test fun bothProviderMarksArePackagedNativeVectors() {
+    @Test fun officialProviderLogoAssetsAreNotBundled() {
         val root=File(System.getProperty("projectRoot"),"app/src/main/res/drawable")
         listOf("provider_openai.xml","provider_deepseek.xml").forEach {name ->
-            val text=File(root,name).readText();assertTrue(text.contains("<vector"));assertTrue(text.contains("android:pathData=\"M"));assertTrue(text.length<12000)
+            assertFalse(File(root,name).exists())
         }
     }
-    @Test fun providerMarkDoesNotNeedRuntimeDownloadOrLetterFallback() {
-        val text=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui/components/MessageCard.kt").readText().substringAfter("@Composable private fun ProviderMark").substringBefore("@Composable private fun MessageActions")
-        assertTrue(text.contains("R.drawable.provider_openai"));assertTrue(text.contains("R.drawable.provider_deepseek"));assertFalse(text.contains("http"));assertFalse(text.contains("Text("))
+    @Test fun providerIdentityUsesModelLabelWithoutOfficialMarks() {
+        val text=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui/components/MessageCard.kt").readText()
+        assertTrue(text.contains("Text(modelLabel(lane.ref,lane.displayName)"));assertFalse(text.contains("R.drawable.provider_"));assertFalse(text.contains("painterResource"))
     }
 }

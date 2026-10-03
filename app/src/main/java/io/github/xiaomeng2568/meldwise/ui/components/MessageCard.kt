@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 package io.github.xiaomeng2568.meldwise.ui.components
 
 import androidx.compose.foundation.layout.*
@@ -7,9 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.Color
-import io.github.xiaomeng2568.meldwise.R
 import androidx.compose.ui.semantics.*
 import io.github.xiaomeng2568.meldwise.data.ChatMessage
 import io.github.xiaomeng2568.meldwise.provider.*
@@ -40,7 +38,6 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
     Column(modifier.fillMaxWidth().testTag("assistantOutput").semantics {stateDescription=laneLabel(lane.state)},
         verticalArrangement=Arrangement.spacedBy(Space.small)) {
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-            ProviderMark(lane.ref.providerId)
             Column(Modifier.weight(1f)) {
                 Text(modelLabel(lane.ref,lane.displayName),style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 status?.let {Text(it,style=MaterialTheme.typography.labelMedium,
@@ -52,12 +49,6 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
         if(lane.answer.isNotEmpty()) MessageActions(lane.answer)
         if(onDetails!=null && lane.state in setOf(LaneState.Failed,LaneState.Incomplete)) TextButton(onClick=onDetails) {Text("查看详情")}
     }
-}
-/** Packaged provider marks identify the source; never loaded over the network. */
-@Composable private fun ProviderMark(providerId:String) {
-    Icon(painterResource(if(providerId==ProviderIds.CHATGPT) R.drawable.provider_openai else R.drawable.provider_deepseek),
-        contentDescription=providerLabel(providerId)+" 提供方",modifier=Modifier.size(Sizes.providerMark),
-        tint=if(providerId==ProviderIds.CHATGPT) MaterialTheme.colorScheme.onSurface else Color.Unspecified)
 }
 @Composable private fun MessageActions(text:String) {
     var menu by remember {mutableStateOf(false)}
