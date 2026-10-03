@@ -4,6 +4,7 @@ import io.github.xiaomeng2568.meldwise.auth.*
 import io.github.xiaomeng2568.meldwise.network.*
 import io.github.xiaomeng2568.meldwise.provider.*
 import io.github.xiaomeng2568.meldwise.security.CredentialStore
+import io.github.xiaomeng2568.meldwise.data.ModelCatalogCache
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.mockwebserver.*
@@ -68,5 +69,34 @@ class ProviderTransportTests {
     @Test fun capabilityIntersectionDoesNotInventSupport() {
         val provider=ProviderCapability(setOf(Capability.STREAMING,Capability.TOOLS));val model=ProviderCapability(setOf(Capability.STREAMING,Capability.IMAGE_INPUT))
         val auth=ProviderCapability(setOf(Capability.STREAMING));assertEquals(setOf(Capability.STREAMING),provider.intersect(model,auth).supported)
+    }
+    @Test fun encryptedCachedChatgptCatalogAllowsOneExplicitPostWithoutGet()=runBlocking {
+        MockWebServer().use {server ->server.start();server.enqueue(MockResponse().setBody(stream()))
+            val p=provider(server);val blob=MemoryBlob();val box=testBox("catalog")
+            val cache=ModelCatalogCache(blob,box);cache.save("chatgpt",p.parseModels(catalog().getBody()!!.readUtf8()),1)
+            p.restoreCatalog(ModelCatalogCache(blob,box).load().getValue("chatgpt").models)
+            val events=withTimeout(5000) {p.streamResponse(LlmRequest("synthetic-model",listOf(LlmMessage(MessageRole.USER,"synthetic")))).toList()}
+            assertTrue(events.last() is LlmEvent.Completed);assertEquals(1,server.requestCount);assertEquals("POST",server.takeRequest().method)
+        }
+    }
+    @Test fun cachedChatgptCatalogDoesNotAdmitUnknownModel()=runBlocking {
+        MockWebServer().use {server ->server.start();val p=provider(server);p.restoreCatalog(p.parseModels(catalog().getBody()!!.readUtf8()))
+            val events=p.streamResponse(LlmRequest("not-in-catalog",listOf(LlmMessage(MessageRole.USER,"synthetic")))).toList()
+            assertEquals(ErrorKind.MODEL_UNAVAILABLE,(events.single() as LlmEvent.Failed).error.kind);assertEquals(0,server.requestCount)
+        }
+    }
+    @Test fun clearingCachedChatgptAdmissionDoesNotSend()=runBlocking {
+        MockWebServer().use {server ->server.start();val p=provider(server);p.restoreCatalog(p.parseModels(catalog().getBody()!!.readUtf8()));p.restoreCatalog(emptyList())
+            val events=p.streamResponse(LlmRequest("synthetic-model",listOf(LlmMessage(MessageRole.USER,"synthetic")))).toList()
+            assertEquals(ErrorKind.MODEL_UNAVAILABLE,(events.single() as LlmEvent.Failed).error.kind);assertEquals(0,server.requestCount)
+        }
+    }
+    @Test fun failedChatgptRefreshKeepsCachedCatalogUsable()=runBlocking {
+        MockWebServer().use {server ->server.start();server.enqueue(MockResponse().setResponseCode(503).setBody("{}"));server.enqueue(MockResponse().setBody(stream()))
+            val p=provider(server);p.restoreCatalog(p.parseModels(catalog().getBody()!!.readUtf8()))
+            try {p.listModels();fail("Expected bounded failure")} catch(f:ProviderFailure) {assertEquals(ErrorKind.SERVER,f.error.kind)}
+            assertTrue(p.streamResponse(LlmRequest("synthetic-model",listOf(LlmMessage(MessageRole.USER,"synthetic")))).toList().last() is LlmEvent.Completed)
+            assertEquals(2,server.requestCount);assertEquals("GET",server.takeRequest().method);assertEquals("POST",server.takeRequest().method)
+        }
     }
 }

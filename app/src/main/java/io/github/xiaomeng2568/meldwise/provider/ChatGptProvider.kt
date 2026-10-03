@@ -30,6 +30,7 @@ class ChatGptProvider(private val tokens:TokenManager,private val network:Networ
     private val mutableInference=MutableStateFlow<InferenceDiagnostic?>(null)
     val inferenceDiagnostic:StateFlow<InferenceDiagnostic?> = mutableInference.asStateFlow()
     fun invalidateCatalog() {models=emptyList();catalogDiagnostic=null;mutableInference.value=null}
+    internal fun restoreCatalog(cached:List<LlmModel>) {io.github.xiaomeng2568.meldwise.data.validateCachedModels(cached);models=cached.toList()}
     override suspend fun validateConnection():ProviderStatus = when(val state=tokens.state.value) {
         is AuthState.Connected->if(state.planEnabled) ProviderStatus.READY else ProviderStatus.IDENTITY_ONLY
         is AuthState.ReauthRequired->ProviderStatus.REAUTH_REQUIRED

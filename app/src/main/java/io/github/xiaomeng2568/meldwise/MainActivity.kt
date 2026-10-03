@@ -51,17 +51,19 @@ class MainActivity:ComponentActivity() {
                 val compare by viewModel.compareRun.collectAsStateWithLifecycle()
                 val runs by viewModel.compareHistory.collectAsStateWithLifecycle()
                 val sessions by viewModel.singleHistory.collectAsStateWithLifecycle()
+                val catalogStatus by viewModel.catalogStatus.collectAsStateWithLifecycle()
                 var configure by remember {mutableStateOf(false)}
                 val actions=remember {
                     ChatActions(viewModel::chooseProvider,viewModel::selectRef,viewModel::loadModels,{
                         viewModel.connect {url -> startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))}
                     },viewModel::disconnect,{configure=true},viewModel::removeApiKey,viewModel::showLegacy,viewModel::send,viewModel::cancel,
                         viewModel::newChat,viewModel::setThinking,{s ->viewModel.startCompare(s.prompt,s.a,s.b,s.pa,s.pb)},
-                        viewModel::openSession,viewModel::openCompare,viewModel::clearCompareDraft)
+                        viewModel::openSession,viewModel::openCompare,viewModel::clearCompareDraft,
+                        viewModel::deleteHistory,viewModel::moveHistory,viewModel::dismissCatalogNotice)
                 }
                 ChatScreen(screen,auth,apiState,inference,processing,appearance,{mode ->
                     appearance=mode;preferences.edit {putString("mode",mode.name)}
-                },actions,FoundationState(catalogs,thinking,compare,runs,sessions),accent,{value ->
+                },actions,FoundationState(catalogs,thinking,compare,runs,sessions,catalogStatus),accent,{value ->
                     accent=value;preferences.edit {if(value==null) remove("accent") else putLong("accent",value)}
                 })
                 if(configure) {

@@ -3,6 +3,7 @@ package io.github.xiaomeng2568.meldwise
 import io.github.xiaomeng2568.meldwise.provider.*
 import io.github.xiaomeng2568.meldwise.network.*
 import io.github.xiaomeng2568.meldwise.security.*
+import io.github.xiaomeng2568.meldwise.data.ModelCatalogCache
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
@@ -42,6 +43,34 @@ class DeepSeekInferenceTests {
         assertTrue(e.last() is LlmEvent.Completed);assertEquals(marker,e.filterIsInstance<LlmEvent.TextDelta>().joinToString("") {it.text})
         assertTrue(d.terminalSuccessValidated);assertEquals(5L,(e.last() as LlmEvent.Completed).usage!!.totalTokens)
     }}
+    @Test fun encryptedCachedDeepseekCatalogAllowsOneExplicitPostWithoutGet()=runBlocking {
+        MockWebServer().use {s ->s.start();s.enqueue(MockResponse().setBody(frames(added,delta,completed)))
+            val p=provider(s);val blob=MemoryBlob();val box=testBox("catalog");val cache=ModelCatalogCache(blob,box)
+            cache.save("deepseek",p.parseModels(catalog),1);p.restoreCatalog(ModelCatalogCache(blob,box).load().getValue("deepseek").models)
+            val events=withTimeout(5000) {p.streamResponse(input()).toList()}
+            assertTrue(events.last() is LlmEvent.Completed);assertEquals(1,s.requestCount);assertEquals("POST",s.takeRequest().method)
+        }
+    }
+    @Test fun cachedDeepseekCatalogDoesNotAdmitUnknownModel()=runBlocking {
+        MockWebServer().use {s ->s.start();val p=provider(s);p.restoreCatalog(p.parseModels(catalog))
+            val events=p.streamResponse(input("not-in-catalog")).toList()
+            assertEquals(ErrorKind.MODEL_UNAVAILABLE,(events.single() as LlmEvent.Failed).error.kind);assertEquals(0,s.requestCount)
+        }
+    }
+    @Test fun clearingCachedDeepseekAdmissionDoesNotSend()=runBlocking {
+        MockWebServer().use {s ->s.start();val p=provider(s);p.restoreCatalog(p.parseModels(catalog));p.restoreCatalog(emptyList())
+            val events=p.streamResponse(input()).toList()
+            assertEquals(ErrorKind.MODEL_UNAVAILABLE,(events.single() as LlmEvent.Failed).error.kind);assertEquals(0,s.requestCount)
+        }
+    }
+    @Test fun failedDeepseekRefreshKeepsCachedCatalogUsable()=runBlocking {
+        MockWebServer().use {s ->s.start();s.enqueue(MockResponse().setResponseCode(503).setBody("{}"));s.enqueue(MockResponse().setBody(frames(added,delta,completed)))
+            val p=provider(s);p.restoreCatalog(p.parseModels(catalog))
+            try {p.listModels();fail("Expected bounded failure")} catch(f:ProviderFailure) {assertEquals(ErrorKind.SERVER,f.error.kind)}
+            assertTrue(p.streamResponse(input()).toList().last() is LlmEvent.Completed)
+            assertEquals(2,s.requestCount);assertEquals("GET",s.takeRequest().method);assertEquals("POST",s.takeRequest().method)
+        }
+    }
     @Test fun normalDeltaDoneAndCompletion() {success("""{"type":"response.created"}""",added,delta,done,completed)}
     @Test fun namedSseEventsSupported() {
         val body="event: response.output_item.added\ndata: $added\n\nevent: response.output_text.delta\ndata: $delta\n\nevent: response.completed\ndata: $completed\n\n"

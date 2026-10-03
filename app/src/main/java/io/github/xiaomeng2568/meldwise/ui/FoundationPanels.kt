@@ -17,7 +17,8 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
 
 class FoundationState(val catalogs:Map<String,List<LlmModel>> = emptyMap(),val thinking:ReasoningPreference=ReasoningPreference.Auto,
-    val run:CompareRun?=null,val runs:List<CompareRun> = emptyList(),val sessions:List<SingleSessionInfo> = emptyList()) {
+    val run:CompareRun?=null,val runs:List<CompareRun> = emptyList(),val sessions:List<SingleSessionInfo> = emptyList(),
+    val catalogStatus:CatalogUiState=CatalogUiState()) {
     override fun toString()="FoundationState([REDACTED])"
 }
 fun preferenceLabel(p:ReasoningPreference)=when(p) {ReasoningPreference.Off->"关闭";ReasoningPreference.Auto->"默认"

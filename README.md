@@ -2,7 +2,7 @@
 
 Meldwise 是一个 Android 多模型聊天客户端。你可以单独聊，也可以把同一个问题交给两个模型，看看各自怎么回答。
 
-当前版本：**0.1.0 Alpha**（`v0.1.0-alpha.1`）。这是第一个公开测试版，欢迎试用和反馈。
+当前版本：**0.1.0 Alpha 2**（`v0.1.0-alpha.2`）。这轮主要打磨历史管理、返回导航和模型目录恢复，欢迎试用和反馈。
 
 ## 现在能做什么
 
@@ -15,7 +15,7 @@ Meldwise 是一个 Android 多模型聊天客户端。你可以单独聊，也�
 - 切换浅色、深色、跟随系统和自定义重点色。
 - 阅读 Markdown、代码和纯文本，复制需要的内容。
 
-模型按服务商和模型 ID 区分。加载模型、发送消息都由你操作；恢复历史会保留记录的状态。
+模型按服务商和模型 ID 区分。打开应用先读取本地模型列表，列表为空或超过 24 小时后才后台更新；更新失败时旧列表继续保留。发送消息由你操作，恢复历史会保留记录的状态。历史菜单支持删除和调整顺序。
 
 ## 使用前了解一下
 
@@ -57,7 +57,7 @@ Meldwise 是社区开发的非官方客户端，与服务商没有隶属或赞�
 
 Meldwise is an Android multi-model chat client. Chat with one model or ask two models the same question and read their answers independently.
 
-Current version: **0.1.0 Alpha** (`v0.1.0-alpha.1`), the first public prerelease.
+Current version: **0.1.0 Alpha 2** (`v0.1.0-alpha.2`), a prerelease focused on history management, navigation and model catalog recovery.
 
 ## Features
 
@@ -70,7 +70,7 @@ Current version: **0.1.0 Alpha** (`v0.1.0-alpha.1`), the first public prerelease
 - Light, Dark, System and custom accent themes.
 - Native Markdown, code and plain-text rendering with copy actions.
 
-Models are identified by provider and model ID. Requests require explicit user actions; restored history does not resume requests automatically.
+Models are identified by provider and model ID. Startup uses the local catalog immediately and refreshes configured providers in the background only when the cache is empty or over 24 hours old. Failed refreshes preserve the previous catalog. Sending remains explicit; restored history never resumes inference. History supports deletion and reordering.
 
 ## Limitations
 

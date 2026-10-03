@@ -78,8 +78,8 @@ class FlatCompareVisualTest {
     @Test fun thinkingChoiceAppliesWithoutSecondConfirmation() {
         fixture(dark=true);compose.onNodeWithText("对比").performClick();compose.onNodeWithText("好了").assertDoesNotExist()
         compose.onNodeWithText("关闭").assertExists();capture("05-compact-settings")
-        compose.onNodeWithText("关闭").performClick();compose.onNodeWithText("模型 A：ChatGPT-5.6-Luna").assertDoesNotExist()
-        compose.onNodeWithText("ChatGPT-5.6-Luna").assertExists();assertEquals(0,actionsInvoked)
+        compose.onNodeWithText("关闭").performClick();compose.onNodeWithText("模型 A：ChatGPT-5.6-Luna").assertExists()
+        compose.onNodeWithText("模型 B：DeepSeek-V4.1-Flash").assertExists();assertEquals(0,actionsInvoked)
     }
     @Test fun composerWithKeyboardAndMultilineGrowth() {
         fixture();compose.onNodeWithContentDescription("消息输入框").performClick().performTextInput("这是一条本地输入样例")

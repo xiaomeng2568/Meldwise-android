@@ -36,6 +36,9 @@ class AppContainer(context:Context) {
         AesGcmBox(deepSeekKey::get,"meldwise.deepseek.apikey.v1",8192))
     val deepSeek=DeepSeekProvider(deepSeekCredentials,network)
     val providers=ProviderRegistry(listOf(provider,deepSeek))
+    private val catalogKey=AndroidKey("meldwise.catalogs.v1")
+    val modelCatalogCache=io.github.xiaomeng2568.meldwise.data.ModelCatalogCache(AndroidAtomicBlob(File(directory,"catalogs.v1"),1_048_608),
+        AesGcmBox(catalogKey::get,"meldwise.catalogs.v1",1_048_608))
     val chat=ChatRepository(AndroidAtomicBlob(File(directory,"chat.v1"),8_388_640),
         AesGcmBox(chatKey::get,"meldwise.chat.v1",8_388_640))
     private val compareKey=AndroidKey("meldwise.compare.v1")

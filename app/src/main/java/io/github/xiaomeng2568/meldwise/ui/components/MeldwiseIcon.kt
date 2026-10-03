@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import io.github.xiaomeng2568.meldwise.ui.theme.Sizes
 
-enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Check }
+enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Check, Chat, Compare }
 /** Original geometric icons. Accessibility labels belong to their interactive parent. */
 @Composable fun MeldwiseIcon(glyph: Glyph, modifier: Modifier = Modifier) {
     val color = androidx.compose.material3.LocalContentColor.current
@@ -35,6 +35,9 @@ enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Che
                 Glyph.More -> { listOf(5f,12f,19f).forEach { drawCircle(color,1.6f,Offset(it,12f)) } }
                 Glyph.Close -> { line(6f,6f,18f,18f);line(18f,6f,6f,18f) }
                 Glyph.Check -> { line(5f,12f,10f,17f);line(10f,17f,20f,7f) }
+                Glyph.Chat -> {drawRoundRect(color,Offset(3f,4f),Size(18f,14f),androidx.compose.ui.geometry.CornerRadius(4f),style=Stroke(1.7f));line(7f,18f,5f,21f)}
+                Glyph.Compare -> {drawRoundRect(color,Offset(2f,3f),Size(14f,12f),androidx.compose.ui.geometry.CornerRadius(3f),style=Stroke(1.7f));
+                    drawRoundRect(color,Offset(8f,10f),Size(14f,11f),androidx.compose.ui.geometry.CornerRadius(3f),style=Stroke(1.7f))}
             }
         }
     }

@@ -46,11 +46,13 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
             Notice("密钥加密保存在这台设备。保存后的完整密钥不会重新显示。删除本机密钥后，历史对话会保留。")
         }
         screen.error?.let {Notice(errorLabel(it),"操作提示",error=true)}
-        Text("对话加密保存在本机。模型加载与消息发送都由你主动发起。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("对话加密保存在本机。模型列表会在需要时后台更新；消息由你发送。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 @Composable internal fun ModelPicker(screen: ScreenState, ready: Boolean, actions: ChatActions,
-    onSettings: ()->Unit, onSelected: ()->Unit,catalogs:Map<String,List<LlmModel>> = emptyMap(),onPick:(ModelRef)->Unit=actions.selectModel) {
+    onSettings: ()->Unit, onSelected: ()->Unit,catalogs:Map<String,List<LlmModel>> = emptyMap(),onPick:(ModelRef)->Unit=actions.selectModel,
+    loading:Set<String> = emptySet(),selection:ModelRef?=screen.selected,preference:ReasoningPreference=ReasoningPreference.Auto,
+    onThinking:(ReasoningPreference)->Unit=actions.thinking) {
     PanelColumn("选择模型") {
         listOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK).forEach {id ->
             val active=screen.providerId==id
@@ -65,14 +67,15 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
                     listed.forEach {model ->
                             val ref=ModelRef(id,model.id)
                             TextButton(enabled=!screen.busy,onClick={onPick(ref);onSelected()},
-                                modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {selected=selectedModel(screen.selected,ref)}) {
+                                modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {selected=selectedModel(selection,ref)}) {
                                 Text(modelLabel(ref,model.displayName),Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
-                                if(selectedModel(screen.selected,ref)) MeldwiseIcon(Glyph.Check)
+                                if(selectedModel(selection,ref)) MeldwiseIcon(Glyph.Check)
                             }
+                            if(selectedModel(selection,ref)) ThinkingChoices(ref,preference,enabled=!screen.busy,onThinking)
                         }
                     if(active) {
-                        if(screen.models.isEmpty()) Text(if(ready) "加载可用模型后，就能开始聊了。" else "先连接账号或配置密钥。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(enabled=ready && !screen.busy,onClick=actions.loadModels) {Text(if(screen.models.isEmpty()) "加载模型" else "重新加载模型")}
+                        if(screen.models.isEmpty()) Text(if(id in loading) "正在更新模型…" else if(ready) "还没有可用模型。" else "先连接账号或配置密钥。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(enabled=ready && !screen.busy && id !in loading,onClick=actions.loadModels) {Text(if(id in loading) "更新中…" else "更新模型")}
                     }
                 }
         }
