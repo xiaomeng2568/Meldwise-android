@@ -19,7 +19,7 @@ object Radius { val small=RoundedCornerShape(12.dp); val medium=RoundedCornerSha
 object Elevation { val flat=0.dp; val raised=2.dp; val floating=6.dp }
 object Sizes { val touch=48.dp; val actionVisual=40.dp; val icon=24.dp; val providerMark=28.dp
     val composerMax=120.dp; val composerMin=44.dp; val composerInputMin=40.dp; val composerInset=2.dp
-    val contentMax=760.dp; const val userFraction=.86f; const val sheetFraction=.85f }
+    val contentMax=760.dp;val noticeMax=360.dp;val noticeBorder=1.dp; const val userFraction=.86f; const val sheetFraction=.85f }
 private val light = lightColorScheme(
     primary=Color(0xFF6550A4), onPrimary=Color.White, primaryContainer=Color(0xFFEEE8FA), onPrimaryContainer=Color(0xFF322152),
     background=Color(0xFFFAFAFC), onBackground=Color(0xFF24232A), surface=Color(0xFFFFFFFF), onSurface=Color(0xFF24232A),
@@ -63,3 +63,11 @@ internal fun accentColors(darkMode:Boolean,rgb:Long?):ColorScheme {
         shapes=Shapes(small=Radius.small,medium=Radius.medium,large=Radius.bubble,extraLarge=Radius.composer),content=content)
 }
 @Composable fun codeStyle() = MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace)
+@Composable internal fun noticeColors(kind:io.github.xiaomeng2568.meldwise.data.CatalogNoticeKind):Pair<Color,Color> {
+    val darkMode=MaterialTheme.colorScheme.background.luminance()<.5f
+    return when(kind) {
+        io.github.xiaomeng2568.meldwise.data.CatalogNoticeKind.Success->if(darkMode) Color(0xFF1A3323) to Color(0xFF76C58D) else Color(0xFFEAF7EE) to Color(0xFF37824B)
+        io.github.xiaomeng2568.meldwise.data.CatalogNoticeKind.Warning->if(darkMode) Color(0xFF3A301B) to Color(0xFFD2B66C) else Color(0xFFFFF5DC) to Color(0xFFAD8430)
+        io.github.xiaomeng2568.meldwise.data.CatalogNoticeKind.Failure->MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
+    }
+}

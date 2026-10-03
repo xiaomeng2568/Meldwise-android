@@ -95,7 +95,7 @@ class UiFoundationTest {
     }
     @Test fun compareOpensConfigurationWithoutSending() {
         var calls=0;screen(actions=ChatActions({},{},{},{},{},{},{},{},{calls++},{},compare={calls++}))
-        compose.onNodeWithContentDescription("更多输入选项").performClick();compose.onNodeWithText("对比").performClick()
+        compose.onNodeWithContentDescription("选择对话模式").performClick();compose.onNodeWithText("对比").performClick()
         compose.onNodeWithText("模型 A：请选择").assertExists();compose.onNodeWithText("模型 B：请选择").assertExists()
         compose.runOnIdle {assertEquals(0,calls)}
     }

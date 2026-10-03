@@ -30,6 +30,10 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     internal val localRestorationFinished:StateFlow<Boolean> = localRestoreFinished.asStateFlow()
     private val mutable=MutableStateFlow(ScreenState(busy=true))
     val screen:StateFlow<ScreenState> = mutable
+    private val catalogLoader=ModelCatalogLoader(container.providers,container.modelCatalogCache,
+        diagnostic={id ->if(id==ProviderIds.CHATGPT) container.provider.catalogDiagnostic else container.deepSeek.catalogDiagnostic},
+        hydrate={id,models ->if(id==ProviderIds.CHATGPT) container.provider.restoreCatalog(models) else container.deepSeek.restoreCatalog(models)})
+    val catalogStatus=catalogLoader.state
     private val cache=MutableStateFlow<Map<String,List<LlmModel>>>(emptyMap())
     val catalogs:StateFlow<Map<String,List<LlmModel>>> = cache.asStateFlow()
     val thinking=MutableStateFlow(ReasoningPreference.Auto)
@@ -52,10 +56,23 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             val ref=container.chat.activeRef()
             replace(messages=messages,providerId=ref.providerId,historyRef=ref,ready=localReady(ref.providerId))
             refreshHistory();thinking.value=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto
+            catalogLoader.restore()
+            syncCatalog(catalogLoader.state.value)
         }
         catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
         finally { replace(busy=false,error=screen.value.error);localRestoreFinished.value=true }
+        // Local state is usable before stale catalogs refresh. No chat or authorization on startup.
+        catalogLoader.refreshStaleOnce()
     } }
+    init {viewModelScope.launch {catalogLoader.state.collect {syncCatalog(it)}}}
+    private fun syncCatalog(status:CatalogUiState) {
+        cache.value=status.catalogs
+        val id=screen.value.providerId;val ref=screen.value.historyRef
+        val models=status.catalogs[id] ?: emptyList()
+        replace(models=models,selected=ref.takeIf {it.providerId==id && models.any {m->m.id==it.modelId}},
+            catalogDiagnostic=status.diagnostics[id],error=screen.value.error)
+    }
+    fun dismissCatalogNotice(id:Long) {viewModelScope.launch {catalogLoader.dismiss(id)}}
     private suspend fun localReady(id:String)=withContext(Dispatchers.IO) { container.providers.get(id).validateConnection()==ProviderStatus.READY }
     private fun replace(models:List<LlmModel> = screen.value.models,selected:ModelRef?=screen.value.selected,
         messages:List<ChatMessage> = screen.value.messages,busy:Boolean=screen.value.busy,error:String?=null,
@@ -70,7 +87,8 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             try {
                 val messages=withContext(Dispatchers.IO) { container.chat.activateProvider(id) }
                 thinking.value=if(id==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto
-                replace(providerId=id,messages=messages,historyRef=container.chat.activeRef(),models=cache.value[id] ?: emptyList(),selected=null,
+                val ref=container.chat.activeRef();val models=cache.value[id] ?: emptyList()
+                replace(providerId=id,messages=messages,historyRef=ref,models=models,selected=ref.takeIf {models.any {m->m.id==it.modelId}},
                     catalogDiagnostic=null,ready=localReady(id))
             } catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
             finally { replace(busy=false,error=screen.value.error) }
@@ -83,6 +101,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         replace(busy=true)
         viewModelScope.launch {
             try {
+                catalogLoader.invalidate(ProviderIds.DEEPSEEK)
                 withContext(Dispatchers.IO) { if(key==null) container.deepSeekCredentials.remove() else container.deepSeekCredentials.replace(key) }
                 container.deepSeek.invalidateCatalog()
                 cache.value=cache.value-ProviderIds.DEEPSEEK
@@ -109,7 +128,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         replace(busy=true)
         authJob=viewModelScope.launch {
             replace(busy=true)
-            try { container.oauth.connect(browser);cache.value=cache.value-ProviderIds.CHATGPT;container.provider.invalidateCatalog(); replace(models=emptyList(),selected=null) }
+            try {catalogLoader.invalidate(ProviderIds.CHATGPT);container.oauth.connect(browser);container.provider.invalidateCatalog(); replace(models=emptyList(),selected=null) }
             catch(cancel:CancellationException) { throw cancel }
             catch(failure:AuthFailure) { replace(error=failure.reason.name) }
             catch(_:Exception) { replace(error="AUTH_UNAVAILABLE") }
@@ -118,17 +137,8 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun loadModels() {
         if(screen.value.busy) return
-        replace(busy=true,catalogDiagnostic=null)
-        loadJob=viewModelScope.launch {
-            replace(busy=true,catalogDiagnostic=null)
-            val id=screen.value.providerId
-            try { val models=container.providers.get(id).listModels();cache.value=cache.value+(id to models); replace(models=models,selected=null) }
-            catch(cancel:CancellationException) { throw cancel }
-            catch(failure:ProviderFailure) { replace(error=failure.error.kind.name) }
-            catch(_:Exception) { replace(error="MODEL_CATALOG_UNAVAILABLE") }
-            finally { replace(busy=false,error=screen.value.error,ready=localReady(id),
-                catalogDiagnostic=if(id==ProviderIds.CHATGPT) container.provider.catalogDiagnostic else container.deepSeek.catalogDiagnostic) }
-        }
+        val id=screen.value.providerId
+        loadJob=viewModelScope.launch {catalogLoader.load(id)}
     }
     fun select(id:String) {
         if(screen.value.busy || screen.value.models.none { it.id==id }) return
@@ -219,7 +229,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     fun setThinking(value:ReasoningPreference) {if(!screen.value.busy && ReasoningPolicy.supported(screen.value.selected ?: screen.value.historyRef,value)) thinking.value=value}
     fun newChat() {
         if(screen.value.busy) return
-        val ref=screen.value.selected ?: return
+        val ref=screen.value.selected ?: screen.value.historyRef
         replace(busy=true)
         viewModelScope.launch {try {replace(messages=withContext(Dispatchers.IO) {container.chat.newSession(ref)},historyRef=ref);refreshHistory()}
             catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
@@ -248,13 +258,31 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         }
     }
     fun openCompare(id:String) {if(!screen.value.busy) compareRun.value=compareHistory.value.firstOrNull {it.id==id}}
+    fun deleteHistory(id:String,compare:Boolean) {
+        if(screen.value.busy) return;replace(busy=true)
+        viewModelScope.launch {try {
+            withContext(Dispatchers.IO) {if(compare) container.compare.delete(id) else container.chat.deleteSession(id)}
+            if(compare && compareRun.value?.id==id) compareRun.value=null
+            if(!compare) {val messages=withContext(Dispatchers.IO) {container.chat.load()};val ref=container.chat.activeRef()
+                if(ref.providerId!=screen.value.providerId) thinking.value=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto
+                replace(messages=messages,historyRef=ref,providerId=ref.providerId,ready=localReady(ref.providerId));syncCatalog(catalogLoader.state.value)}
+            refreshHistory()
+        } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
+    }
+    fun moveHistory(id:String,compare:Boolean,direction:Int) {
+        if(screen.value.busy) return;replace(busy=true)
+        viewModelScope.launch {try {
+            withContext(Dispatchers.IO) {if(compare) container.compare.move(id,direction) else container.chat.moveSession(id,direction)}
+            refreshHistory()
+        } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
+    }
     fun clearCompareDraft() {if(!screen.value.busy) compareRun.value=null}
     fun cancel() { compareJob?.cancel();chatJob?.cancel(); authJob?.cancel(); loadJob?.cancel() }
     fun foregroundStopped() { compareJob?.cancel();chatJob?.cancel() } // Browser authorization intentionally survives the browser handoff.
     fun disconnect() {
         if(screen.value.busy || screen.value.providerId!=ProviderIds.CHATGPT) return
         replace(busy=true)
-        viewModelScope.launch { try { container.tokens.clearLocalConnection();cache.value=cache.value-ProviderIds.CHATGPT;container.provider.invalidateCatalog(); replace(models=emptyList(),selected=null,ready=false) }
+        viewModelScope.launch { try {catalogLoader.invalidate(ProviderIds.CHATGPT);container.tokens.clearLocalConnection();container.provider.invalidateCatalog(); replace(models=emptyList(),selected=null,ready=false) }
             catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
             finally { replace(busy=false,error=screen.value.error) } }
     }

@@ -61,6 +61,20 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
             it.messages.firstOrNull {m ->m.role==MessageRole.USER}?.text?.take(80) ?: "新对话")}.reversed()
     }
     private fun rowId(s:ChatSession)=s.sessionId.ifEmpty {"legacy:${s.providerId}:${s.modelId}"}
+    @Synchronized fun deleteSession(id:String):List<ChatMessage> {
+        load();val removed=journal.sessions.single {rowId(it)==id}
+        val remaining=journal.sessions.filterNot {rowId(it)==id}
+        val active=removed.providerId==journal.activeProviderId && removed.modelId==journal.activeModelId && removed.sessionId==journal.activeSessionId
+        val next=if(active) remaining.lastOrNull() else null
+        persist(journal.copy(sessions=remaining,activeProviderId=next?.providerId ?: journal.activeProviderId,
+            activeModelId=next?.modelId ?: journal.activeModelId,activeSessionId=if(active) next?.sessionId ?: "" else journal.activeSessionId))
+        return messages.toList()
+    }
+    @Synchronized fun moveSession(id:String,direction:Int) {
+        load();val byId=journal.sessions.associateBy(::rowId)
+        val order=movedHistory(journal.sessions.reversed().map(::rowId),id,direction)
+        persist(journal.copy(sessions=order.reversed().map {byId.getValue(it)}))
+    }
     @Synchronized fun newSession(ref:ModelRef):List<ChatMessage> {
         load();validateRef(ref)
         val id=MessageIds.create()
@@ -126,8 +140,11 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
         return messages.toList()
     }
     private fun save(value:List<ChatMessage>) {
-        val others=journal.sessions.filterNot { it.providerId==journal.activeProviderId && it.modelId==journal.activeModelId && it.sessionId==journal.activeSessionId }
-        persist(journal.copy(sessions=others+ChatSession(journal.activeProviderId,journal.activeModelId,value,journal.activeSessionId)))
+        val current=ChatSession(journal.activeProviderId,journal.activeModelId,value,journal.activeSessionId)
+        val found=journal.sessions.any {it.providerId==current.providerId && it.modelId==current.modelId && it.sessionId==current.sessionId}
+        val sessions=if(found) journal.sessions.map {if(it.providerId==current.providerId && it.modelId==current.modelId && it.sessionId==current.sessionId) current else it}
+            else journal.sessions+current
+        persist(journal.copy(sessions=sessions))
     }
     private fun setJournal(value:ChatJournal) {
         journal=value

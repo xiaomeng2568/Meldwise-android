@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,20 +33,24 @@ class ChatActions(val chooseProvider: (String)->Unit, val selectModel: (ModelRef
     val configureKey: ()->Unit, val removeKey: ()->Unit, val showLegacy: ()->Unit,
     val send: (String)->Unit, val cancel: ()->Unit,val newChat:()->Unit={},
     val thinking:(ReasoningPreference)->Unit={},val compare:(CompareSubmission)->Unit={},
-    val openSingle:(String)->Unit={},val openCompare:(String)->Unit={},val newCompare:()->Unit={})
+    val openSingle:(String)->Unit={},val openCompare:(String)->Unit={},val newCompare:()->Unit={},
+    val deleteHistory:(String,Boolean)->Unit={_,_->},val moveHistory:(String,Boolean,Int)->Unit={_,_,_->},
+    val dismissNotice:(Long)->Unit={})
 class CompareSubmission(val prompt:String,val a:ModelRef,val b:ModelRef,val pa:ReasoningPreference,val pb:ReasoningPreference) {
     override fun toString()="CompareSubmission([REDACTED])"
 }
-private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Providers, Gallery, CompareSetup, Thinking, History }
+private typealias Panel = ChatPanel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ChatScreen(screen: ScreenState, auth: AuthState, apiState: ApiKeyState,
     inference: InferenceDiagnostic?, processing: ProcessingTime, appearance: Appearance,
     onAppearance: (Appearance)->Unit, actions: ChatActions, foundation:FoundationState=FoundationState(),
     accent:Long?=null,onAccent:(Long?)->Unit={}) {
-    var panel by remember {mutableStateOf(Panel.None)}
+    var navigation by remember {mutableStateOf(ChatNavigation())}
+    val panel=navigation.panel
+    var noticeDetails by remember {mutableStateOf<CatalogNotice?>(null)}
     var input by remember {mutableStateOf("")}
-    var compareMode by remember {mutableStateOf(false)}
+    val compareMode=navigation.compareMode
     var pickingLane by remember {mutableStateOf<String?>(null)}
     var modelA by remember {mutableStateOf<ModelRef?>(null)}
     var modelB by remember {mutableStateOf<ModelRef?>(null)}
@@ -61,8 +66,10 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
     val list=rememberLazyListState()
     val compareList=rememberLazyListState()
     val compareItems=remember(foundation.run,foundation.catalogs) {foundation.run?.let {compareMessageItems(it,foundation.catalogs)} ?: emptyList()}
+    val keyboardVisible=WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)>0
+    BackHandler(enabled=panel==Panel.None && navigation.handlesBack && !keyboardVisible) {navigation=navigation.back()}
     LaunchedEffect(foundation.run?.id) {
-        foundation.run?.let {run ->compareMode=true;modelA=run.outputs.firstOrNull()?.modelRef;modelB=run.outputs.getOrNull(1)?.modelRef
+        foundation.run?.let {run ->navigation=navigation.copy(compareMode=true);modelA=run.outputs.firstOrNull()?.modelRef;modelB=run.outputs.getOrNull(1)?.modelRef
             effortA=run.outputs.firstOrNull()?.preference ?: ReasoningPreference.Auto;effortB=run.outputs.getOrNull(1)?.preference ?: ReasoningPreference.Auto}
     }
     var followLatest by remember {mutableStateOf(true)}
@@ -87,11 +94,12 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
             }
         }
     }
+    Box(Modifier.fillMaxSize()) {
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.widthIn(max=Sizes.contentMax).fillMaxWidth().padding(horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
-                SoftAction(Glyph.Menu,"打开菜单",{panel=Panel.Settings},tonal=false)
-                TextButton(onClick={panel=if(compareMode) Panel.CompareSetup else Panel.Models},modifier=Modifier.weight(1f).heightIn(min=Sizes.touch)) {
+                SoftAction(Glyph.Menu,"打开菜单",{navigation=navigation.open(Panel.Settings)},tonal=false)
+                TextButton(onClick={pickingLane=null;navigation=navigation.open(if(compareMode) Panel.CompareSetup else Panel.Models)},modifier=Modifier.weight(1f).heightIn(min=Sizes.touch)) {
                     Column(horizontalAlignment=Alignment.CenterHorizontally) {
                         Text(if(compareMode) "对比" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleMedium)
                         Text(if(compareMode) listOfNotNull(modelA,modelB).joinToString(" × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
@@ -99,15 +107,14 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
                     }
                     MeldwiseIcon(Glyph.Chevron)
                 }
-                SoftAction(Glyph.Plus,"新对话",{input="";if(compareMode) actions.newCompare() else actions.newChat()},
-                    enabled=!screen.busy && (compareMode || screen.selected!=null),tonal=false)
+                SoftAction(Glyph.Plus,"选择对话模式",{navigation=navigation.open(Panel.Modes)},enabled=!screen.busy,tonal=false)
             }
             if(compareMode) {
                 LazyColumn(Modifier.weight(1f).widthIn(max=Sizes.contentMax).fillMaxWidth().testTag("compareMessageFlow"),state=compareList,
                     contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.wide)) {
                     if(compareItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large)) {
                         Text("把同一个问题交给两个模型。",style=MaterialTheme.typography.titleMedium)
-                        TextButton(onClick={panel=Panel.CompareSetup}) {Text("选择模型")}
+                        TextButton(onClick={navigation=navigation.open(Panel.CompareSetup)}) {Text("选择模型")}
                     }}
                     items(compareItems,key={it.key}) {CompareMessage(it)}
                 }
@@ -121,7 +128,7 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
                     contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.large)) {
                     items(screen.messages,key={it.id}) {message ->
                         MessageCard(message,screen.historyRef,name,if(processing.messageId==message.id) processing.seconds else null,
-                            onDetails={panel=Panel.Diagnostics})
+                            onDetails={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)})
                     }
                 }
             }
@@ -130,59 +137,72 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
                     Surface(shape=Radius.surface,color=MaterialTheme.colorScheme.surfaceContainerLow) {
                         Row(Modifier.fillMaxWidth().padding(start=Space.content),verticalAlignment=Alignment.CenterVertically) {
                             Text(errorLabel(it),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
-                            TextButton(onClick={panel=Panel.Diagnostics}) {Text("详情")}
+                            TextButton(onClick={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)}) {Text("详情")}
                         }
                     }
                 }
-                if(!compareMode && !ready && !screen.busy) TextButton(onClick={panel=Panel.Providers},modifier=Modifier.fillMaxWidth()) {
+                if(!compareMode && !ready && !screen.busy) TextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
                     Text(if(chatgpt) "连接 ChatGPT 后开始聊天" else "配置 DeepSeek 密钥后开始聊天")
                 }
                 Composer(input,{if(it.length<=32768) input=it},screen.busy,
                     input.isNotBlank() && if(compareMode) available(modelA) && available(modelB) && modelA!=modelB else ready && screen.selected!=null,
                     onSend={if(compareMode) {val a=modelA;val b=modelB;if(a!=null && b!=null) actions.compare(CompareSubmission(input,a,b,effortA,effortB))} else actions.send(input);input=""},
-                    onStop=actions.cancel,onCompare={compareMode=true;panel=Panel.CompareSetup},onThinking={panel=if(compareMode) Panel.CompareSetup else Panel.Thinking},
+                    onStop=actions.cancel,onThinking={navigation=navigation.open(if(compareMode) Panel.CompareSetup else Panel.Thinking)},
                     compareMode=compareMode,thinking=foundation.thinking!=ReasoningPreference.Off && chatgpt.not(),
-                    onSingle={compareMode=false},sendLabel=if(compareMode) "同时询问" else "发送消息")
+                    options=navigation.composerOptions,onOptions={navigation=navigation.copy(composerOptions=it)},
+                    sendLabel=if(compareMode) "同时询问" else "发送消息")
                 Text(if(compareMode) "按各自服务计费 · 记录留在本机" else if(chatgpt) "ChatGPT 套餐" else "DeepSeek API 计费",
                     style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier=Modifier.align(Alignment.CenterHorizontally).padding(bottom=Space.small))
             }
         }
     }
+    CatalogBanner(foundation.catalogStatus.notices.firstOrNull(),actions.dismissNotice,{notice ->
+        noticeDetails=notice;navigation=navigation.open(Panel.Diagnostics);actions.dismissNotice(notice.id)
+    },Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(Space.content))
+    }
     if(panel!=Panel.None) {
         val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
-        ModalBottomSheet(onDismissRequest={panel=Panel.None},sheetState=sheetState,containerColor=MaterialTheme.colorScheme.background,shape=Radius.composer) {
+        ModalBottomSheet(onDismissRequest={navigation=navigation.dismiss();pickingLane=null},sheetState=sheetState,
+            properties=ModalBottomSheetProperties(shouldDismissOnBackPress=false),containerColor=MaterialTheme.colorScheme.background,shape=Radius.composer) {
+            BackHandler(enabled=!keyboardVisible) {navigation=navigation.back();if(navigation.panel!=Panel.Models) pickingLane=null}
+            if(navigation.stack.size>1) SoftAction(Glyph.Back,"返回上一步",{navigation=navigation.back();if(navigation.panel!=Panel.Models) pickingLane=null},tonal=false)
             when(panel) {
-                Panel.Models -> ModelPicker(screen,ready,actions,onSettings={panel=Panel.Providers},onSelected={},
-                    catalogs=foundation.catalogs,onPick={ref ->
+                Panel.Models -> ModelPicker(screen,ready,actions,onSettings={navigation=navigation.open(Panel.Providers)},onSelected={},
+                    catalogs=foundation.catalogs,loading=foundation.catalogStatus.loading,
+                    selection=if(pickingLane=="A") modelA else if(pickingLane=="B") modelB else screen.selected,
+                    preference=if(pickingLane=="A") effortA else if(pickingLane=="B") effortB else foundation.thinking,
+                    onThinking={p ->if(pickingLane=="A") effortA=p else if(pickingLane=="B") effortB=p else actions.thinking(p)},onPick={ref ->
                         if(pickingLane=="A") {modelA=ref;effortA=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto}
                         else if(pickingLane=="B") {modelB=ref;effortB=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto}
                         else actions.selectModel(ref)
-                        panel=if(pickingLane!=null && (modelA==null || modelB==null)) Panel.CompareSetup else Panel.None;pickingLane=null
                     })
                 Panel.CompareSetup -> PanelColumn("对比") {
                     listOf("A" to modelA,"B" to modelB).forEach {(id,ref) ->
                             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
-                                TextButton(enabled=!screen.busy,onClick={pickingLane=id;panel=Panel.Models}) {
+                                TextButton(enabled=!screen.busy,onClick={pickingLane=id;navigation=navigation.open(Panel.Models)}) {
                                     Text("模型 $id：${ref?.let {modelLabel(it,foundation.catalogs[it.providerId]?.firstOrNull {m ->m.id==it.modelId}?.displayName ?: it.modelId)} ?: "请选择"}")
                                 }
-                                ref?.let {ThinkingChoices(it,if(id=="A") effortA else effortB,enabled=!screen.busy) {p ->if(id=="A") effortA=p else effortB=p;panel=Panel.None}
+                                ref?.let {ThinkingChoices(it,if(id=="A") effortA else effortB,enabled=!screen.busy) {p ->if(id=="A") effortA=p else effortB=p}
                                     if(!available(it)) Text("先配置账号并加载模型。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                     }
                     if(modelA!=null && modelA==modelB) Text("选两个不同的模型。",color=MaterialTheme.colorScheme.error)
                 }
-                Panel.Thinking -> PanelColumn("思考") {ThinkingChoices(current,foundation.thinking,enabled=!screen.busy) {actions.thinking(it);panel=Panel.None}}
+                Panel.Thinking -> PanelColumn("思考") {ThinkingChoices(current,foundation.thinking,enabled=!screen.busy,actions.thinking)}
                 Panel.History -> PanelColumn("历史") {
                     Text("对话",style=MaterialTheme.typography.titleMedium)
-                    foundation.sessions.forEach {s ->SettingsRow(s.title,modelLabel(s.ref,s.ref.modelId),{actions.openSingle(s.id);compareMode=false;panel=Panel.None})}
+                    foundation.sessions.forEachIndexed {index,s ->HistoryRow(s.title,modelLabel(s.ref,s.ref.modelId),screen.busy,index>0,index<foundation.sessions.lastIndex,
+                        onOpen={input="";actions.openSingle(s.id);navigation=navigation.dismiss().copy(compareMode=false)},
+                        onDelete={actions.deleteHistory(s.id,false)},onMove={actions.moveHistory(s.id,false,it)})}
                     Text("对比",style=MaterialTheme.typography.titleMedium)
-                    foundation.runs.forEach {run ->SettingsRow(run.prompt.take(80),"${run.laneA.modelRef.modelId} × ${run.laneB.modelRef.modelId}",{
-                        actions.openCompare(run.id);modelA=run.laneA.modelRef;modelB=run.laneB.modelRef;compareMode=true;panel=Panel.None
-                    })}
+                    foundation.runs.forEachIndexed {index,run ->HistoryRow(run.prompt.take(80),"${label(run.laneA.modelRef)} × ${label(run.laneB.modelRef)}",screen.busy,index>0,index<foundation.runs.lastIndex,
+                        onOpen={input="";actions.openCompare(run.id);modelA=run.laneA.modelRef;modelB=run.laneB.modelRef;navigation=navigation.dismiss().copy(compareMode=true)},
+                        onDelete={actions.deleteHistory(run.id,true)},onMove={actions.moveHistory(run.id,true,it)})}
+                    if(foundation.sessions.isEmpty() && foundation.runs.isEmpty()) Text("还没有记录。",style=MaterialTheme.typography.bodyMedium)
                 }
                 Panel.Providers -> ProviderSettings(screen,auth,apiState,actions)
-                Panel.Diagnostics -> DiagnosticsPanel(screen,inference)
+                Panel.Diagnostics -> if(noticeDetails==null) DiagnosticsPanel(screen,inference) else CatalogDetails(requireNotNull(noticeDetails))
                 Panel.Appearance -> PanelColumn("外观") {
                     Appearance.entries.forEach {item ->
                         TextButton(onClick={onAppearance(item)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch)) {
@@ -194,14 +214,16 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
                 }
                 Panel.Gallery -> ComponentGallery()
                 Panel.Settings -> PanelColumn("设置") {
-                    SettingsRow("历史","对话与对比",{panel=Panel.History})
-                    SettingsRow("提供方与账号","ChatGPT 套餐 / DeepSeek API",{panel=Panel.Providers})
-                    SettingsRow("外观","主题与重点色",{panel=Panel.Appearance})
-                    SettingsRow("诊断","只含脱敏状态",{panel=Panel.Diagnostics})
-                    SettingsRow("组件预览","开发者选项",{panel=Panel.Gallery})
-                    if(chatgpt) TextButton(enabled=!screen.busy,onClick={actions.showLegacy();panel=Panel.None}) {Text("查看旧版 ChatGPT 记录")}
+                    SettingsRow("历史","对话与对比",{navigation=navigation.open(Panel.History)})
+                    SettingsRow("提供方与账号","ChatGPT 套餐 / DeepSeek API",{navigation=navigation.open(Panel.Providers)})
+                    SettingsRow("外观","主题与重点色",{navigation=navigation.open(Panel.Appearance)})
+                    SettingsRow("诊断","只含脱敏状态",{noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)})
+                    SettingsRow("组件预览","开发者选项",{navigation=navigation.open(Panel.Gallery)})
+                    if(chatgpt) TextButton(enabled=!screen.busy,onClick={actions.showLegacy();navigation=navigation.dismiss()}) {Text("查看旧版 ChatGPT 记录")}
                     Text("Meldwise · ${androidx.compose.ui.res.stringResource(io.github.xiaomeng2568.meldwise.R.string.public_alpha_version)}\n非官方客户端 · SIWC 兼容性：有条件通过",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Panel.Modes -> ModePicker(enabled=!screen.busy,onSingle={input="";actions.newChat();navigation=navigation.selectMode(false)},
+                    onCompare={input="";actions.newCompare();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;navigation=navigation.selectMode(true)})
                 Panel.None -> Unit
             }
         }
@@ -209,15 +231,14 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
 }
 
 @Composable private fun Composer(input: String, onInput: (String)->Unit, busy: Boolean, canSend: Boolean,
-    onSend: ()->Unit, onStop: ()->Unit,onCompare:()->Unit,onThinking:()->Unit,compareMode:Boolean,thinking:Boolean,
-    onSingle:()->Unit,sendLabel:String) {
-    var options by remember {mutableStateOf(false)}
+    onSend: ()->Unit, onStop: ()->Unit,onThinking:()->Unit,compareMode:Boolean,thinking:Boolean,
+    options:Boolean,onOptions:(Boolean)->Unit,sendLabel:String) {
     Box(Modifier.fillMaxWidth().testTag("composer").animateContentSize()) {
         Surface(Modifier.matchParentSize().padding(vertical=Sizes.composerInset).testTag("composerSurface"),shape=Radius.surface,
             color=MaterialTheme.colorScheme.surfaceContainerLow) {}
         Column {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                SoftAction(Glyph.Plus,"更多输入选项",{options=!options},enabled=!busy,tonal=false)
+                SoftAction(Glyph.Plus,"更多输入选项",{onOptions(!options)},enabled=!busy,tonal=false)
                 BasicTextField(value=input,onValueChange=onInput,enabled=!busy,textStyle=MaterialTheme.typography.bodyLarge.copy(color=MaterialTheme.colorScheme.onSurface),
                     cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),minLines=1,maxLines=5,
                     modifier=Modifier.weight(1f).heightIn(min=Sizes.composerInputMin,max=Sizes.composerMax).padding(horizontal=Space.small,vertical=Space.micro).semantics {contentDescription="消息输入框"},
@@ -228,9 +249,7 @@ private enum class Panel { None, Settings, Models, Diagnostics, Appearance, Prov
                     if(busy) onStop else onSend,enabled=busy || canSend,primary=true)
             }
             if(options) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-                FilterChip(selected=compareMode,onClick={options=false;onCompare()},enabled=!busy,label={Text("对比")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
-                FilterChip(selected=thinking,onClick={options=false;onThinking()},enabled=!busy,label={Text("思考")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
-                if(compareMode) TextButton(enabled=!busy,onClick={onSingle();options=false}) {Text("单聊")}
+                FilterChip(selected=thinking,onClick={onOptions(false);onThinking()},enabled=!busy,label={Text("思考")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
                 TextButton(enabled=false,onClick={}) {Text("附件")}
             }
         }

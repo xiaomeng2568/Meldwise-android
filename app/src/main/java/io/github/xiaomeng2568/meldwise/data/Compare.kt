@@ -95,7 +95,12 @@ class CompareRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
         }
         return records.toList()
     }
-    @Synchronized fun upsert(run:CompareRun) {load();write(records.filterNot {it.id==run.id}+run)}
+    @Synchronized fun upsert(run:CompareRun) {load();write(if(records.any {it.id==run.id}) records.map {if(it.id==run.id) run else it} else records+run)}
+    @Synchronized fun delete(id:String) {load();require(records.any {it.id==id});write(records.filterNot {it.id==id})}
+    @Synchronized fun move(id:String,direction:Int) {
+        load();val byId=records.associateBy {it.id};val order=movedHistory(records.reversed().map {it.id},id,direction)
+        write(order.reversed().map {byId.getValue(it)})
+    }
     private fun validate(value:List<CompareRun>) {
         require(value.size<=16 && value.map {it.id}.distinct().size==value.size)
         value.forEach {run ->

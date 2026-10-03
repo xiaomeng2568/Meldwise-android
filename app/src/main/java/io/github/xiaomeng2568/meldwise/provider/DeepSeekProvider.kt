@@ -21,6 +21,7 @@ class DeepSeekProvider(private val credentials:DeepSeekCredentials,private val n
     private val mutableInference=MutableStateFlow<InferenceDiagnostic?>(null)
     val inferenceDiagnostic:StateFlow<InferenceDiagnostic?> = mutableInference.asStateFlow()
     fun invalidateCatalog() { models=emptyList();catalogDiagnostic=null;mutableInference.value=null }
+    internal fun restoreCatalog(cached:List<LlmModel>) {io.github.xiaomeng2568.meldwise.data.validateCachedModels(cached);models=cached.toList()}
     override suspend fun validateConnection():ProviderStatus = when(credentials.state()) {
         io.github.xiaomeng2568.meldwise.security.ApiKeyState.CONFIGURED->ProviderStatus.READY
         io.github.xiaomeng2568.meldwise.security.ApiKeyState.MISSING->ProviderStatus.DISCONNECTED
