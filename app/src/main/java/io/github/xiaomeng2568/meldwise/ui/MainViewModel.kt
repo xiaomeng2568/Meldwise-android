@@ -40,9 +40,20 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     val compareRun=MutableStateFlow<CompareRun?>(null)
     val compareHistory=MutableStateFlow<List<CompareRun>>(emptyList())
     val singleHistory=MutableStateFlow<List<SingleSessionInfo>>(emptyList())
+    val sharingRequest=MutableStateFlow<String?>(null)
+    val conversation=MutableStateFlow<Conversation?>(null)
+    val conversationMode=MutableStateFlow(ConversationMode.Single)
+    val collaborateConfig=MutableStateFlow<CollaborateConfig?>(null)
+    val collaborateSharing=MutableStateFlow<CollaborateConfig?>(null)
+    private var pendingCollaborate:PreparedCollaborate?=null
+    private var collaborateJob:Job?=null
+    private var pendingTurn:PreparedTurn?=null
+    private var pendingThinking=ReasoningPreference.Auto
+    private fun clearSharing() {pendingTurn=null;sharingRequest.value=null;pendingCollaborate=null;collaborateSharing.value=null}
     private var compareJob:Job?=null
     private suspend fun refreshHistory()=withContext(Dispatchers.IO) {
         singleHistory.value=container.chat.sessions();compareHistory.value=container.compare.load().reversed()
+        conversation.value=container.chat.activeConversation();conversationMode.value=container.chat.mode();collaborateConfig.value=container.chat.collaborateConfig()
     }
     // Presentation-only timing observation; provider, refresh and terminal logic remain unchanged.
     val processingTime=io.github.xiaomeng2568.meldwise.ui.presentation.ProcessingObserver(screen,viewModelScope,container.network.diagnostics).state
@@ -82,6 +93,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun chooseProvider(id:String) {
         if(screen.value.busy || id==screen.value.providerId) return
+        clearSharing()
         replace(busy=true)
         viewModelScope.launch {
             try {
@@ -118,7 +130,9 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         replace(busy=true)
         viewModelScope.launch {
             try { val ref=ModelRef(ProviderIds.CHATGPT,"UNKNOWN")
-                replace(messages=withContext(Dispatchers.IO) { container.chat.activate(ref) },selected=null,historyRef=ref)
+                val messages=withContext(Dispatchers.IO) {container.chat.sessions().firstOrNull {it.ref==ref}?.let {container.chat.activateSession(it.id)}}
+                if(messages==null) replace(error="LEGACY_HISTORY_UNAVAILABLE") else replace(messages=messages,selected=null,historyRef=ref)
+                refreshHistory()
             } catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
             finally { replace(busy=false,error=screen.value.error) }
         }
@@ -142,6 +156,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun select(id:String) {
         if(screen.value.busy || screen.value.models.none { it.id==id }) return
+        clearSharing()
         val ref=ModelRef(screen.value.providerId,id);replace(busy=true)
         viewModelScope.launch {
             try { replace(messages=withContext(Dispatchers.IO) { container.chat.activate(ref) },selected=ref,historyRef=ref) }
@@ -151,6 +166,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun selectRef(ref:ModelRef) {
         if(screen.value.busy || cache.value[ref.providerId]?.none {it.id==ref.modelId}!=false) return
+        clearSharing()
         replace(busy=true)
         viewModelScope.launch {try {
             thinking.value=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto
@@ -161,9 +177,30 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun send(text:String) {
         if(screen.value.busy || text.isBlank()) return
+        if(conversationMode.value==ConversationMode.Collaborate) {sendCollaborate(text);return}
         val model=screen.value.selected ?: return
         val preference=thinking.value
         if(!ReasoningPolicy.supported(model,preference)) {replace(error="UNSUPPORTED_CAPABILITY");return}
+        clearSharing();replace(busy=true)
+        chatJob=viewModelScope.launch {
+            try {
+                val turn=withContext(Dispatchers.IO) {container.chat.prepare(text,screen.value.models.firstOrNull {it.id==model.modelId}?.displayName)}
+                if(turn.requiresSharing) {
+                    pendingTurn=turn;pendingThinking=preference;sharingRequest.value=model.providerId
+                    replace(busy=false)
+                } else {currentCoroutineContext().ensureActive();executeTurn(turn,preference,false)}
+            } catch(cancel:CancellationException) {replace(busy=false);throw cancel}
+            catch(_:Exception) {replace(busy=false,error="LOCAL_STORAGE_UNAVAILABLE")}
+        }
+    }
+    fun cancelSharing() {clearSharing()}
+    fun continueSharing() {
+        if(screen.value.busy) return
+        val turn=pendingTurn ?: return;val preference=pendingThinking
+        clearSharing();executeTurn(turn,preference,true)
+    }
+    private fun executeTurn(turn:PreparedTurn,preference:ReasoningPreference,allowSharing:Boolean) {
+        val model=turn.ref
         replace(busy=true)
         chatJob=viewModelScope.launch {
             replace(busy=true)
@@ -177,7 +214,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             try {
                 if(!container.providers.ready(model)) throw ProviderFailure(LlmError(ErrorKind.AUTHENTICATION))
                 require(model==container.chat.activeRef())
-                val begin=withContext(Dispatchers.IO) { container.chat.begin(text) }; messageId=begin.first
+                val begin=withContext(Dispatchers.IO) { container.chat.beginPrepared(turn,allowSharing) }; messageId=begin.first
                 replace(messages=withContext(Dispatchers.IO) { container.chat.load() })
                 periodic=launch {
                     var savedLength=0
@@ -229,17 +266,71 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     fun setThinking(value:ReasoningPreference) {if(!screen.value.busy && ReasoningPolicy.supported(screen.value.selected ?: screen.value.historyRef,value)) thinking.value=value}
     fun newChat() {
         if(screen.value.busy) return
+        clearSharing()
         val ref=screen.value.selected ?: screen.value.historyRef
         replace(busy=true)
-        viewModelScope.launch {try {replace(messages=withContext(Dispatchers.IO) {container.chat.newSession(ref)},historyRef=ref);refreshHistory()}
+        viewModelScope.launch {try {replace(messages=withContext(Dispatchers.IO) {container.chat.newSession(ref)},historyRef=ref);compareRun.value=null;refreshHistory()}
             catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
+    }
+    fun newCollaborate() {
+        if(screen.value.busy) return
+        clearSharing();replace(busy=true)
+        viewModelScope.launch {try {
+            replace(messages=withContext(Dispatchers.IO) {container.chat.newCollaborate()});compareRun.value=null;refreshHistory()
+        } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
+    }
+    fun configureCollaborate(selection:CompareSubmission) {
+        if(screen.value.busy || conversationMode.value!=ConversationMode.Collaborate) return
+        fun model(ref:ModelRef,p:ReasoningPreference):CollaborateModel? {
+            val item=cache.value[ref.providerId]?.firstOrNull {it.id==ref.modelId} ?: return null
+            return CollaborateModel(ref,item.displayName,p)
+        }
+        val a=model(selection.a,selection.pa) ?: return;val b=model(selection.b,selection.pb) ?: return
+        val config=CollaborateConfig(a,b)
+        if(a.ref==b.ref || !ReasoningPolicy.supported(a.ref,a.preference) || !ReasoningPolicy.supported(b.ref,b.preference)) return
+        clearSharing();replace(busy=true)
+        viewModelScope.launch {try {
+            withContext(Dispatchers.IO) {container.chat.configureCollaborate(config)};refreshHistory()
+        } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
+    }
+    private fun sendCollaborate(text:String,retryId:String?=null) {
+        clearSharing();replace(busy=true)
+        collaborateJob=viewModelScope.launch {
+            try {
+                val plan=withContext(Dispatchers.IO) {if(retryId==null) container.chat.prepareCollaborate(text) else container.chat.prepareCollaborateRetry(retryId)}
+                if(listOf(plan.config.primary,plan.config.reviewer).any {m ->cache.value[m.ref.providerId]?.none {it.id==m.ref.modelId}!=false}) {
+                    replace(busy=false,error="MODEL_UNAVAILABLE");return@launch
+                }
+                if(plan.requiresSharing) {pendingCollaborate=plan;collaborateSharing.value=plan.config;replace(busy=false)}
+                else {currentCoroutineContext().ensureActive();executeCollaborate(plan,false)}
+            } catch(cancel:CancellationException) {replace(busy=false);throw cancel}
+            catch(_:Exception) {replace(busy=false,error="LOCAL_STORAGE_UNAVAILABLE")}
+        }
+    }
+    fun continueCollaborateSharing() {
+        if(screen.value.busy) return
+        val plan=pendingCollaborate ?: return
+        clearSharing();executeCollaborate(plan,true)
+    }
+    fun retryCollaborate(id:String) {if(!screen.value.busy) sendCollaborate("",id)}
+    private fun executeCollaborate(plan:PreparedCollaborate,allowSharing:Boolean) {
+        replace(busy=true)
+        collaborateJob=viewModelScope.launch {
+            try {
+                CollaborateExecutor(container.providers,container.chat).execute(plan,allowSharing) {c ->conversation.value=c;replace(messages=c.messages)}
+            } catch(cancel:CancellationException) {throw cancel}
+            catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")}
+            finally {withContext(NonCancellable) {runCatching {refreshHistory()};replace(busy=false,error=screen.value.error)}}
+        }
     }
     fun openSession(id:String) {
         if(screen.value.busy) return;replace(busy=true)
+        clearSharing()
         viewModelScope.launch {try {val messages=withContext(Dispatchers.IO) {container.chat.activateSession(id)};val ref=container.chat.activeRef()
             thinking.value=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto
             replace(messages=messages,historyRef=ref,providerId=ref.providerId,models=cache.value[ref.providerId] ?: emptyList(),
                 selected=ref.takeIf {cache.value[it.providerId]?.any {m ->m.id==it.modelId}==true},ready=localReady(ref.providerId))
+            compareRun.value=null;refreshHistory()
         } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
     }
     fun startCompare(prompt:String,a:ModelRef,b:ModelRef,pa:ReasoningPreference,pb:ReasoningPreference) {
@@ -260,6 +351,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     fun openCompare(id:String) {if(!screen.value.busy) compareRun.value=compareHistory.value.firstOrNull {it.id==id}}
     fun deleteHistory(id:String,compare:Boolean) {
         if(screen.value.busy) return;replace(busy=true)
+        clearSharing()
         viewModelScope.launch {try {
             withContext(Dispatchers.IO) {if(compare) container.compare.delete(id) else container.chat.deleteSession(id)}
             if(compare && compareRun.value?.id==id) compareRun.value=null
@@ -272,13 +364,16 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     fun moveHistory(id:String,compare:Boolean,direction:Int) {
         if(screen.value.busy) return;replace(busy=true)
         viewModelScope.launch {try {
-            withContext(Dispatchers.IO) {if(compare) container.compare.move(id,direction) else container.chat.moveSession(id,direction)}
+            withContext(Dispatchers.IO) {if(compare) container.compare.move(id,direction) else {
+                val mode=container.chat.sessions().single {it.id==id}.mode
+                container.chat.moveSession(id,direction,mode)
+            }}
             refreshHistory()
         } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
     }
     fun clearCompareDraft() {if(!screen.value.busy) compareRun.value=null}
-    fun cancel() { compareJob?.cancel();chatJob?.cancel(); authJob?.cancel(); loadJob?.cancel() }
-    fun foregroundStopped() { compareJob?.cancel();chatJob?.cancel() } // Browser authorization intentionally survives the browser handoff.
+    fun cancel() { collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel(); authJob?.cancel(); loadJob?.cancel() }
+    fun foregroundStopped() {clearSharing();collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel() } // Browser authorization intentionally survives the browser handoff.
     fun disconnect() {
         if(screen.value.busy || screen.value.providerId!=ProviderIds.CHATGPT) return
         replace(busy=true)

@@ -2,6 +2,7 @@ package io.github.xiaomeng2568.meldwise.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -17,9 +18,18 @@ enum class Appearance { System, Light, Dark }
 object Space { val micro=4.dp; val small=8.dp; val medium=12.dp; val section=20.dp; val content=16.dp; val wide=24.dp; val large=32.dp; val hero=48.dp }
 object Radius { val small=RoundedCornerShape(12.dp); val medium=RoundedCornerShape(16.dp); val surface=RoundedCornerShape(20.dp); val bubble=RoundedCornerShape(24.dp); val composer=RoundedCornerShape(28.dp) }
 object Elevation { val flat=0.dp; val raised=2.dp; val floating=6.dp }
+/** Small shared transitions; Compose honors the device's animator duration scale. */
+object Motion {
+    const val switchMs=220
+    const val fadeInMs=180
+    const val fadeOutMs=150
+    const val noticeLifetimeMs=1500L
+    val panelShift=16.dp
+    val easing=FastOutSlowInEasing
+}
 object Sizes { val touch=48.dp; val actionVisual=40.dp; val icon=24.dp; val providerMark=28.dp
     val composerMax=120.dp; val composerMin=44.dp; val composerInputMin=40.dp; val composerInset=2.dp
-    val contentMax=760.dp;val noticeMax=360.dp;val noticeBorder=1.dp; const val userFraction=.86f; const val sheetFraction=.85f }
+    val contentMax=760.dp;val noticeMax=360.dp;val noticeBorder=1.dp;val modeRowMin=84.dp; const val userFraction=.86f; const val sheetFraction=.85f }
 private val light = lightColorScheme(
     primary=Color(0xFF6550A4), onPrimary=Color.White, primaryContainer=Color(0xFFEEE8FA), onPrimaryContainer=Color(0xFF322152),
     background=Color(0xFFFAFAFC), onBackground=Color(0xFF24232A), surface=Color(0xFFFFFFFF), onSurface=Color(0xFF24232A),

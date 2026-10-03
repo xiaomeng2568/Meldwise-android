@@ -11,11 +11,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
+import io.github.xiaomeng2568.meldwise.R
 import io.github.xiaomeng2568.meldwise.ui.theme.Sizes
 
-enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Check, Chat, Compare }
+enum class Glyph { Menu, Plus, Chevron, Forward, Send, Stop, Copy, Back, More, Close, Check, Chat, Compare, Collaborate, Debate }
 /** Original geometric icons. Accessibility labels belong to their interactive parent. */
 @Composable fun MeldwiseIcon(glyph: Glyph, modifier: Modifier = Modifier) {
+    val vector=when(glyph) {Glyph.Chat->ModeIcons.chat;Glyph.Compare->ModeIcons.compare
+        Glyph.Collaborate->ModeIcons.collaborate;Glyph.Debate->ModeIcons.debate;else->null}
+    if(vector!=null) {Icon(vector,contentDescription=null,modifier=modifier.size(Sizes.icon));return}
     val color = androidx.compose.material3.LocalContentColor.current
     Canvas(modifier.size(Sizes.icon)) {
         scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
@@ -24,6 +30,7 @@ enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Che
                 Glyph.Menu -> { line(4f,6f,20f,6f);line(4f,12f,16f,12f);line(4f,18f,20f,18f) }
                 Glyph.Plus -> { line(12f,5f,12f,19f);line(5f,12f,19f,12f) }
                 Glyph.Chevron -> { line(6f,9f,12f,15f);line(12f,15f,18f,9f) }
+                Glyph.Forward -> { line(9f,6f,15f,12f);line(15f,12f,9f,18f) }
                 Glyph.Send -> { line(12f,19f,12f,5f);line(6f,11f,12f,5f);line(12f,5f,18f,11f) }
                 Glyph.Stop -> drawRoundRect(color,Offset(6f,6f),Size(12f,12f),androidx.compose.ui.geometry.CornerRadius(2f))
                 Glyph.Copy -> {
@@ -35,23 +42,12 @@ enum class Glyph { Menu, Plus, Chevron, Send, Stop, Copy, Back, More, Close, Che
                 Glyph.More -> { listOf(5f,12f,19f).forEach { drawCircle(color,1.6f,Offset(it,12f)) } }
                 Glyph.Close -> { line(6f,6f,18f,18f);line(18f,6f,6f,18f) }
                 Glyph.Check -> { line(5f,12f,10f,17f);line(10f,17f,20f,7f) }
-                Glyph.Chat -> {drawRoundRect(color,Offset(3f,4f),Size(18f,14f),androidx.compose.ui.geometry.CornerRadius(4f),style=Stroke(1.7f));line(7f,18f,5f,21f)}
-                Glyph.Compare -> {drawRoundRect(color,Offset(2f,3f),Size(14f,12f),androidx.compose.ui.geometry.CornerRadius(3f),style=Stroke(1.7f));
-                    drawRoundRect(color,Offset(8f,10f),Size(14f,11f),androidx.compose.ui.geometry.CornerRadius(3f),style=Stroke(1.7f))}
+                Glyph.Chat,Glyph.Compare,Glyph.Collaborate,Glyph.Debate -> Unit
             }
         }
     }
 }
 @Composable fun MeldwiseMark(modifier: Modifier = Modifier) {
     val color=MaterialTheme.colorScheme.primary
-    Canvas(modifier.size(Sizes.touch)) {
-        val path=Path().apply {
-            moveTo(size.width*.12f,size.height*.74f);lineTo(size.width*.12f,size.height*.28f)
-            quadraticTo(size.width*.22f,size.height*.12f,size.width*.36f,size.height*.28f)
-            lineTo(size.width*.5f,size.height*.5f);lineTo(size.width*.64f,size.height*.28f)
-            quadraticTo(size.width*.78f,size.height*.12f,size.width*.88f,size.height*.28f)
-            lineTo(size.width*.88f,size.height*.74f)
-        }
-        drawPath(path,color,style=Stroke(size.width*.075f,cap=StrokeCap.Round))
-    }
+    Icon(painterResource(R.drawable.ic_meldwise_mark),contentDescription=null,modifier=modifier.size(Sizes.touch),tint=color)
 }

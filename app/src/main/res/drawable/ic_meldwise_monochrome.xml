@@ -1,0 +1,7 @@
+<!-- SPDX-License-Identifier: GPL-3.0-only; same original geometry for Android themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="13" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M33,69L33,42Q33,38 37,42L51,56Q54,59 57,56L71,42Q75,38 75,42L75,69" />
+</vector>

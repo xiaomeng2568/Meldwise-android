@@ -4,6 +4,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -90,7 +97,7 @@ fun copyContent(context: Context, text: String) {
     val long=bounded.length>RenderBounds.COLLAPSED_CHARS || bounded.count {it=='\n'}>18
     val shown=if(long && !expanded) RenderBounds.prefix(bounded,RenderBounds.COLLAPSED_CHARS).lineSequence().take(18).joinToString("\n") else bounded
     Surface(Modifier.fillMaxWidth(),shape=Radius.surface,color=MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.padding(horizontal=Space.content)) {
+        Column(Modifier.animateContentSize(tween(Motion.switchMs,easing=Motion.easing)).padding(horizontal=Space.content)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                 Text(label,Modifier.weight(1f),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 CopyAction(text)
@@ -132,11 +139,15 @@ fun copyContent(context: Context, text: String) {
             if(summary.state==ReasoningState.Streaming) Text("正在思考…",style=MaterialTheme.typography.labelSmall)
             if(summary.state==ReasoningState.Interrupted) Text("已中断",style=MaterialTheme.typography.labelSmall)
         }
-        if(expanded) Surface(Modifier.fillMaxWidth(),shape=Radius.medium,color=MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(Modifier.padding(Space.medium),verticalArrangement=Arrangement.spacedBy(Space.small)) {
-                SelectionContainer {Text(RenderBounds.prefix(summary.text,RenderBounds.SURFACE_CHARS),style=MaterialTheme.typography.bodyMedium,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant)}
-                if(summary.text.length>RenderBounds.SURFACE_CHARS) Text("这里显示前 32K 字符。",style=MaterialTheme.typography.labelSmall)
+        AnimatedVisibility(expanded,
+            enter=expandVertically(tween(Motion.switchMs,easing=Motion.easing))+fadeIn(tween(Motion.fadeInMs)),
+            exit=shrinkVertically(tween(Motion.switchMs,easing=Motion.easing))+fadeOut(tween(Motion.fadeOutMs))) {
+            Surface(Modifier.fillMaxWidth(),shape=Radius.medium,color=MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.padding(Space.medium),verticalArrangement=Arrangement.spacedBy(Space.small)) {
+                    SelectionContainer {Text(RenderBounds.prefix(summary.text,RenderBounds.SURFACE_CHARS),style=MaterialTheme.typography.bodyMedium,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)}
+                    if(summary.text.length>RenderBounds.SURFACE_CHARS) Text("这里显示前 32K 字符。",style=MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }

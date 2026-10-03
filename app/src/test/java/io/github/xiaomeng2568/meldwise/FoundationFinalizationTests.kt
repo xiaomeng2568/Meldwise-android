@@ -39,11 +39,11 @@ class FoundationFinalizationTests {
     @Test fun newSessionKeepsPreviousHistory() {
         val blob=MemoryBlob();val box=testBox();val repo=ChatRepository(blob,box);val ref=ModelRef("deepseek","m")
         repo.activate(ref);val (id,_)=repo.begin("old prompt");repo.update(id,"old answer",MessageState.COMPLETED)
-        val old=repo.sessions().single();repo.newSession(ref);assertTrue(repo.load().isEmpty());assertEquals(2,repo.sessions().size)
+        val old=repo.sessions().single();repo.newSession(ref);assertTrue(repo.load().isEmpty());assertEquals(1,repo.sessions().size)
         repo.begin("new prompt");val reopened=ChatRepository(blob,box);reopened.load();assertEquals(ref,reopened.activeRef())
         assertEquals("old answer",reopened.activateSession(old.id).last().text)
     }
-    @Test fun sameModelSessionsKeepDistinctIds() {val r=ChatRepository(MemoryBlob(),testBox());val ref=ModelRef("chatgpt","m");repeat(3) {r.newSession(ref)};assertEquals(3,r.sessions().map {it.id}.distinct().size)}
+    @Test fun sameModelSessionsKeepDistinctIds() {val r=ChatRepository(MemoryBlob(),testBox());val ref=ModelRef("chatgpt","m");repeat(3) {r.newSession(ref);r.begin("prompt")};assertEquals(3,r.sessions().map {it.id}.distinct().size)}
     @Test fun optionalSprint2FieldsMigrateWithoutLoss() {
         val blob=MemoryBlob();val box=testBox();blob.write(box.seal("""{"version":2,"activeProviderId":"deepseek","activeModelId":"m","sessions":[{"providerId":"deepseek","modelId":"m","messages":[{"id":"old","parentMessageId":null,"role":"USER","text":"OLD","state":"COMPLETED"}]}]}""".toByteArray()))
         val repo=ChatRepository(blob,box);assertEquals("OLD",repo.load().single().text);assertEquals(ModelRef("deepseek","m"),repo.activeRef())
@@ -54,13 +54,13 @@ class FoundationFinalizationTests {
         r.update(id,"ANSWER",MessageState.COMPLETED,ReasoningRecord("THOUGHT",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Completed))
         assertFalse(String(blob.bytes!!).contains("THOUGHT"));val m=ChatRepository(blob,box).load().last();assertEquals("THOUGHT",m.reasoning.text);assertEquals("ANSWER",m.text)
     }
-    @Test fun restartInterruptsActiveReasoning() {val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);r.activate(ModelRef("deepseek","m"));val (id,_)=r.begin("input");r.update(id,"partial",MessageState.STREAMING,ReasoningRecord("thought",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Streaming));val m=ChatRepository(blob,box).load().last();assertEquals(MessageState.INCOMPLETE,m.state);assertEquals(ReasoningPhase.Interrupted,m.reasoning.phase)}
-    @Test fun reasoningCompletionIndependentOfAnswerRecovery() {val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);r.activate(ModelRef("deepseek","m"));val (id,_)=r.begin("input");r.update(id,"partial",MessageState.STREAMING,ReasoningRecord("thought",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Completed));val m=ChatRepository(blob,box).load().last();assertEquals(MessageState.INCOMPLETE,m.state);assertEquals(ReasoningPhase.Completed,m.reasoning.phase)}
+    @Test fun restartInterruptsActiveReasoning() {val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);r.activate(ModelRef("deepseek","m"));val (id,_)=r.begin("input");r.update(id,"partial",MessageState.STREAMING,ReasoningRecord("thought",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Streaming));val m=ChatRepository(blob,box).load().last();assertEquals(MessageState.INTERRUPTED,m.state);assertEquals(ReasoningPhase.Interrupted,m.reasoning.phase)}
+    @Test fun reasoningCompletionIndependentOfAnswerRecovery() {val blob=MemoryBlob();val box=testBox();val r=ChatRepository(blob,box);r.activate(ModelRef("deepseek","m"));val (id,_)=r.begin("input");r.update(id,"partial",MessageState.STREAMING,ReasoningRecord("thought",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Completed));val m=ChatRepository(blob,box).load().last();assertEquals(MessageState.INTERRUPTED,m.state);assertEquals(ReasoningPhase.Completed,m.reasoning.phase)}
     @Test fun newSessionNeverBuildsProviderHistoryFromPreviousSession() {val r=ChatRepository(MemoryBlob(),testBox());val ref=ModelRef("deepseek","m");r.activate(ref);val (id,_)=r.begin("OLD");r.update(id,"OLD ANSWER",MessageState.COMPLETED);r.newSession(ref);assertEquals(listOf("NEW"),r.begin("NEW").second.map {it.text})}
-    @Test fun newSessionCountBoundPreservesOldRecords() {val r=ChatRepository(MemoryBlob(),testBox());repeat(32) {r.newSession(ModelRef("deepseek","m"))};assertThrows(IllegalArgumentException::class.java) {r.newSession(ModelRef("deepseek","m"))};assertEquals(32,r.sessions().size)}
+    @Test fun newSessionCountBoundPreservesOldRecords() {val r=ChatRepository(MemoryBlob(),testBox());repeat(32) {r.newSession(ModelRef("deepseek","m"));r.begin("prompt")};r.newSession(ModelRef("deepseek","m"));assertThrows(IllegalArgumentException::class.java) {r.begin("prompt")};assertEquals(32,r.sessions().size)}
     @Test fun singleAndCompareUseSameRenderer() {
         val source=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui/components/MessageCard.kt").readText()
-        assertTrue(source.contains("else AssistantOutput(CompareLane("));assertTrue(source.contains("CompareResultCard(lane:CompareLane,modifier:Modifier=Modifier)=AssistantOutput(lane,modifier)"))
+        assertTrue(source.contains("AssistantOutput(CompareLane(snapshot,"));assertTrue(source.contains("CompareResultCard(lane:CompareLane,modifier:Modifier=Modifier)=AssistantOutput(lane,modifier)"))
         assertEquals(1,Regex("ContentRenderer\\(").findAll(source).count());assertTrue(source.contains("MessageActions(lane.answer)"))
     }
 }
