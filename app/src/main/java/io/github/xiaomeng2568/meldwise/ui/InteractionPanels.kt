@@ -8,12 +8,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import io.github.xiaomeng2568.meldwise.ui.components.*
 import io.github.xiaomeng2568.meldwise.data.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
-import kotlinx.coroutines.delay
 
 @Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit) {
     PanelColumn("开始") {
@@ -50,7 +54,6 @@ import kotlinx.coroutines.delay
 }
 @OptIn(ExperimentalAnimationApi::class)
 @Composable internal fun CatalogBanner(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit,modifier:Modifier=Modifier) {
-    LaunchedEffect(notice?.id) {notice?.let {delay(3500);onDismiss(it.id)}}
     AnimatedContent(targetState=notice,modifier=modifier.widthIn(max=Sizes.noticeMax),label="catalogNotice",
         transitionSpec={(slideInHorizontally {width ->-width}+fadeIn()) togetherWith fadeOut()}) {current ->
         if(current!=null) {
@@ -68,6 +71,22 @@ import kotlinx.coroutines.delay
                 }
             }
         }
+    }
+}
+/** Attach to the active window (chat or modal sheet) so the sheet cannot cover the notice. */
+@Composable internal fun CatalogNoticeOverlay(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit) {
+    if(notice==null) return
+    val density=LocalDensity.current
+    val margin=with(density) {Space.content.roundToPx()}
+    val top=WindowInsets.safeDrawing.getTop(density)+margin
+    val position=remember(margin,top) {object:PopupPositionProvider {
+        override fun calculatePosition(anchorBounds:IntRect,windowSize:IntSize,layoutDirection:LayoutDirection,popupContentSize:IntSize):IntOffset =
+            IntOffset(margin.coerceAtMost((windowSize.width-popupContentSize.width).coerceAtLeast(0)),
+                top.coerceAtMost((windowSize.height-popupContentSize.height).coerceAtLeast(0)))
+    }}
+    Popup(popupPositionProvider=position,
+        properties=PopupProperties(focusable=false,dismissOnBackPress=false,dismissOnClickOutside=false)) {
+        CatalogBanner(notice,onDismiss,onDetails,Modifier.padding(end=Space.content))
     }
 }
 @Composable internal fun CatalogDetails(notice:CatalogNotice) {
