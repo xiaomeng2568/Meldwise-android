@@ -51,7 +51,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
                 BasicTextField(value = input, onValueChange = onInput, enabled = !busy,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface), cursorBrush = SolidColor(colors.primary),
                     minLines = 1, maxLines = 5,
-                    modifier = Modifier.weight(1f).heightIn(min = Sizes.composerInputMin, max = Sizes.composerMax)
+                    modifier = Modifier.weight(1f).heightIn(min = Sizes.touch, max = Sizes.composerMax)
                         .onFocusChanged { focused = it.isFocused }.testTag("composerInput")
                         .padding(horizontal = if (expanded) Space.content else Space.small, vertical = Space.micro)
                         .semantics { contentDescription = "消息输入框" },

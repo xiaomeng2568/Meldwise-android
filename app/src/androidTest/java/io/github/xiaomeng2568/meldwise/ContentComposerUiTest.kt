@@ -73,6 +73,7 @@ class ContentComposerUiTest {
         compose.onNodeWithTag("composer").assertHeightIsEqualTo(48.dp)
         compose.onNodeWithTag("composerSurface", useUnmergedTree=true).assertHeightIsEqualTo(44.dp)
         compose.onNodeWithTag("composerControls").assertDoesNotExist()
+        compose.onNodeWithTag("composerInput").assertHeightIsAtLeast(48.dp)
         compose.onNodeWithContentDescription("发送消息").assertIsNotEnabled()
     }
     @Test fun focusingSameTextFieldShowsSeparateControlRowWithoutLosingFocus() {
@@ -105,7 +106,7 @@ class ContentComposerUiTest {
             compose.onNodeWithContentDescription("发送消息").assertIsDisplayed().assertWidthIsAtLeast(48.dp)
             compose.onNodeWithContentDescription("模型与模式设置").assertIsDisplayed()
         }
-        compose.onNodeWithTag("composerInput").assertHeightIsAtLeast(40.dp)
+        compose.onNodeWithTag("composerInput").assertHeightIsAtLeast(48.dp)
         assertTrue(compose.onNodeWithTag("composerInput").fetchSemanticsNode().boundsInRoot.height / compose.density.density <= 120f)
     }
     @Test fun summaryClickAndBusyStopUseOnlyGivenCallbacks() {
