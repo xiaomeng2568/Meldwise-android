@@ -65,7 +65,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     private val debateWorkflow:DebateWorkflow=DebateWorkflow(viewModelScope,container.chat,container.providers,{cache.value},
         {screen.value.busy},{replace(busy=it,error=if(it) null else screen.value.error)},
         {replace(error=it)},{c->conversation.value=c;replace(messages=c?.messages ?: emptyList())},
-        {refreshHistory(syncDebate=false)})
+        {refreshHistory(syncDebate=false)},executor={DebateExecutor(container.providers,container.chat,usage=container.usage)})
     val debateState=debateWorkflow.state
     init { viewModelScope.launch {
         runCatching { withContext(Dispatchers.IO) { container.tokens.initialize() } }
@@ -219,6 +219,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             var messageId:String?=null; val output=StringBuilder(); var final=MessageState.INCOMPLETE
             var periodic:Job?=null
             var storageFailed=false
+            var accounting:UsageOperation?=null
             var reasoning=ReasoningRecord()
             suspend fun persist(state:MessageState) {
                 messageId?.let { id -> val messages=withContext(Dispatchers.IO) { container.chat.update(id,output.toString(),state,reasoning) }; replace(messages=messages) }
@@ -227,6 +228,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
                 if(!container.providers.ready(model)) throw ProviderFailure(LlmError(ErrorKind.AUTHENTICATION))
                 require(model==container.chat.activeRef())
                 val begin=withContext(Dispatchers.IO) { container.chat.beginPrepared(turn,allowSharing) }; messageId=begin.first
+                accounting=container.usage.begin(UsageOperationId(UsageMode.SINGLE,begin.first,container.chat.conversationId()))
                 replace(messages=withContext(Dispatchers.IO) { container.chat.load() })
                 periodic=launch {
                     var savedLength=0
@@ -240,7 +242,9 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
                         }
                     }
                 }
-                container.providers.get(model.providerId).streamResponse(LlmRequest(model.modelId,begin.second,reasoning=preference)).collect { event ->
+                val provider=container.providers.get(model.providerId)
+                val request=LlmRequest(model.modelId,begin.second,reasoning=preference)
+                accounting.stream(UsageSlot.SINGLE,model) {provider.streamResponse(request)}.collect { event ->
                     when(event) {
                         is LlmEvent.TextDelta->output.append(event.text)
                         is LlmEvent.ReasoningDelta->{
@@ -269,6 +273,10 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
                     if(reasoning.text.isNotEmpty()) reasoning=ReasoningRecord(reasoning.text,reasoning.kind,
                         if(final==MessageState.COMPLETED || reasoning.phase==ReasoningPhase.Completed) ReasoningPhase.Completed else ReasoningPhase.Interrupted)
                     try { persist(final) } catch(_:Exception) { replace(error="LOCAL_STORAGE_UNAVAILABLE") }
+                    accounting?.finish(UsageSlot.SINGLE,when(final) {
+                        MessageState.COMPLETED->RequestOutcome.COMPLETED;MessageState.FAILED->RequestOutcome.FAILED
+                        MessageState.CANCELLED->RequestOutcome.CANCELLED;else->RequestOutcome.INTERRUPTED
+                    })
                     replace(busy=false,error=screen.value.error ?: error,ready=localReady(model.providerId))
                     runCatching {refreshHistory()}
                 }
@@ -337,7 +345,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         replace(busy=true)
         collaborateJob=viewModelScope.launch {
             try {
-                CollaborateExecutor(container.providers,container.chat).execute(plan,allowSharing) {c ->conversation.value=c;replace(messages=c.messages)}
+                CollaborateExecutor(container.providers,container.chat,usage=container.usage).execute(plan,allowSharing) {c ->conversation.value=c;replace(messages=c.messages)}
             } catch(cancel:CancellationException) {throw cancel}
             catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")}
             finally {withContext(NonCancellable) {runCatching {refreshHistory()};replace(busy=false,error=screen.value.error)}}
@@ -362,7 +370,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         val draft=CompareRun(MessageIds.create(),prompt,output("A",a,pa),output("B",b,pb))
         replace(busy=true);compareRun.value=draft
         compareJob=viewModelScope.launch {
-            try {CompareExecutor(container.providers,container.compare).execute(draft) {compareRun.value=it}}
+            try {CompareExecutor(container.providers,container.compare,usage=container.usage).execute(draft) {compareRun.value=it}}
             catch(cancel:CancellationException) {throw cancel}
             catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")}
             finally {withContext(NonCancellable) {runCatching {refreshHistory()};replace(busy=false,error=screen.value.error)}}

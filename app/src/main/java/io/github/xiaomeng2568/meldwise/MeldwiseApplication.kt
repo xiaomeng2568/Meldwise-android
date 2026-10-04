@@ -36,6 +36,7 @@ class AppContainer(context:Context) {
         AesGcmBox(deepSeekKey::get,"meldwise.deepseek.apikey.v1",8192))
     val deepSeek=DeepSeekProvider(deepSeekCredentials,network)
     val providers=ProviderRegistry(listOf(provider,deepSeek))
+    val usage=io.github.xiaomeng2568.meldwise.data.RuntimeUsage()
     private val catalogKey=AndroidKey("meldwise.catalogs.v1")
     val modelCatalogCache=io.github.xiaomeng2568.meldwise.data.ModelCatalogCache(AndroidAtomicBlob(File(directory,"catalogs.v1"),1_048_608),
         AesGcmBox(catalogKey::get,"meldwise.catalogs.v1",1_048_608))
