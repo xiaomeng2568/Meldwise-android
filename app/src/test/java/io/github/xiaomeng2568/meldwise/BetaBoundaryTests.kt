@@ -81,11 +81,13 @@ class BetaBoundaryTests {
         val result=ContentParser.parse(raw);assertTrue(result.truncated)
         assertTrue(result.blocks.none {it is TableBlock})
     }
-    @Test fun candidateMetadataAndREADMEDoNotClaimPublishedBeta() {
+    @Test fun publicBetaMetadataAndREADMEKeepPrereleaseAndUsageBoundaries() {
         val root=File(requireNotNull(System.getProperty("projectRoot")))
         val gradle=File(root,"app/build.gradle.kts").readText();val readme=File(root,"README.md").readText()
-        assertTrue(gradle.contains("versionCode = 219"));assertTrue(gradle.contains("0.3.0-beta.1-validation"));assertTrue(gradle.contains("候选验证"))
-        assertTrue(readme.contains("尚未发布"));assertTrue(readme.contains("not yet published"))
-        assertTrue(readme.contains("no usage dashboard",ignoreCase=true));assertFalse(readme.contains("releases/tag/v0.3.0-beta.1"))
+        assertTrue(gradle.contains("versionCode = 220"));assertTrue(gradle.contains("versionName = \"0.3.0-beta.1\""))
+        assertTrue(gradle.contains("\"public_alpha_version\", \"0.3.0 Beta 1\""));assertFalse(gradle.contains("-validation"))
+        assertFalse(readme.contains("候选验证"));assertFalse(readme.contains("not yet published"))
+        assertTrue(readme.contains("prerelease software"));assertTrue(readme.contains("no usage dashboard",ignoreCase=true))
+        assertTrue(readme.contains("releases/tag/v0.3.0-beta.1"))
     }
 }

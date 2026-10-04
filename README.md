@@ -2,7 +2,7 @@
 
 Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型一直聊下去，把同一个问题交给两个模型分别回答，让两个模型接力审阅，也可以让它们互相检查，再由 Judge 整理最终答案。
 
-当前开发版本：**0.3.0 Beta 1 候选验证**（仅本地验收，尚未发布）。最新公开版本仍为 [0.2.0 Alpha 4](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.4)。候选版本保留四种核心聊法，重点检查升级兼容、阅读体验与执行可靠性，等待人工真机验收。
+当前公开版本：[**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1)，首个 Beta 预发行版。Alpha 阶段建立了四种核心聊法；Beta 从这里开始，重点转向稳定性、兼容性、用量透明与更成熟的历史和恢复体验。
 
 ## 四种聊法
 
@@ -27,7 +27,7 @@ Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型�
 
 ## 阅读和输入
 
-正文支持 Markdown、纯文本和常用数学公式。候选版本补充原生表格、分隔线、删除线、只读任务列表和有界嵌套列表；表格较宽时可以横向查看，链接保持文本展示，不会点击联网。代码块有语言标签和复制按钮，长行可以横向查看，较长内容可以手动展开。代码块与行内代码使用 JetBrains Mono，配合轻量语法高亮，阅读代码更清楚；复制时保留原始内容。
+正文支持 Markdown、纯文本和常用数学公式。这一版补充原生表格、分隔线、删除线、只读任务列表和有界嵌套列表；表格较宽时可以横向查看，链接保持文本展示，不会点击联网。代码块有语言标签和复制按钮，长行可以横向查看，较长内容可以手动展开。代码块与行内代码使用 JetBrains Mono，配合轻量语法高亮，阅读代码更清楚；复制时保留原始内容。
 
 输入框在空闲时保持紧凑，开始输入或编辑多行文字时自然展开。四种模式共用更一致的阅读宽度和间距，模型信息、思考内容与操作按钮也更轻量。
 
@@ -45,7 +45,7 @@ Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型�
 
 ChatGPT 使用你的账号套餐权限；DeepSeek 使用你配置的 API Key，按 DeepSeek API 计费。两家的凭据各自保存，费用也各自计算。
 
-候选版本中的用量基础仅在运行时记录实际发起的模型请求与服务商明确返回的 token 数值，未提供的数据保持未知，部分用量保留覆盖比例。目前没有用量面板、费用显示或用量历史持久化；这些仍属于后续 Beta 工作。应用不会按文字长度估算 token，也不会推算 ChatGPT 套餐剩余额度、重置时间或费用。
+Beta 1 的内部用量基础仅在运行时记录实际发起的模型请求与服务商明确返回的 token 数值，未提供的数据保持未知，部分用量保留覆盖比例。目前没有用量面板、费用显示或用量历史持久化；这些仍属于后续 Beta 工作。应用不会按文字长度估算 token，也不会推算 ChatGPT 套餐剩余额度、重置时间或费用。
 
 在本机断开连接会清除本地可用凭据，远端会话仍会保留。清除应用数据或卸载会移除本地记录。刷新结果无法确认时，应用会请你重新登录。
 
@@ -53,7 +53,7 @@ ChatGPT 使用你的账号套餐权限；DeepSeek 使用你配置的 API Key，�
 
 ## 目前的边界
 
-Meldwise 正在准备首个 Beta 候选，并非已经公开发布 Beta，也不代表 V1 功能完整。四种核心模式的产品形态在此冻结；后续仍可能补充用量展示、历史搜索、重新生成、对话分支、导入导出与可靠性改进。更多设备和长时间使用的验证仍在继续。SIWC 兼容性目前为 CONDITIONAL（有条件通过），完整真机 AndroidTest 覆盖也在继续完善。新增 Markdown 显示项仍待人工视觉验收。
+Meldwise 已进入 Beta，仍是预发行软件，不代表稳定生产版本或 V1 功能完整。四种核心模式的产品形态在此冻结；后续仍可能补充用量与费用展示、历史搜索、重新生成、对话分支、导入导出与可靠性改进。更多设备和长时间使用的验证仍在继续。SIWC 兼容性目前为 CONDITIONAL（有条件通过），完整真机 AndroidTest 覆盖也在继续完善。Markdown 和 TeX 都是有界的实用子集，并非完整 CommonMark/GFM 或 TeX；不使用 WebView，原始 HTML 和脚本样式内容仅作为惰性文本显示。
 
 对比目前围绕单个问题展开；协作保持三阶段，辩论保持五阶段。协作和辩论重试都按整轮、原模型快照进行，不支持单阶段续跑。辩论的 Judge 用于整理答案，不提供胜负评分或答案质量保证。工具调用、图片输入与 OpenAI API Key 接入属于后续方向。旧版 UI 存储格式的降级恢复也仍待完善。
 
@@ -83,7 +83,7 @@ ChatGPT 的可用模型、额度和手动思考设置取决于你的套餐、登
 
 Meldwise is an Android multi-model chat client. Keep a conversation going with one model, compare two independent answers, have two models refine an answer together, or let them cross-review before a Judge puts together the final answer.
 
-The current development build is **0.3.0 Beta 1 candidate validation**, for local acceptance only and not yet published. The latest public release remains [0.2.0 Alpha 4](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.4). The candidate retains all four core modes and focuses on upgrade compatibility, reading quality and execution reliability, pending manual device acceptance.
+The current public release is [**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1), the first Beta prerelease. Alpha established the four core workflows; Beta now focuses on stability, compatibility, usage transparency and more mature history and recovery behavior.
 
 ## Four ways to chat
 
@@ -108,7 +108,7 @@ The app uses the local model catalog on startup and refreshes it in the backgrou
 
 ## Reading and writing
 
-Read Markdown, plain text and common mathematical expressions. The candidate adds native tables, thematic breaks, strikethrough, read-only task lists and bounded nested lists. Wide tables scroll horizontally; links remain non-network text. Code blocks have language labels and copy controls, with horizontal scrolling for long lines and manual expansion for longer content. JetBrains Mono and lightweight highlighting make code easier to scan, while copying preserves the original source.
+Read Markdown, plain text and common mathematical expressions. This release adds native tables, thematic breaks, strikethrough, read-only task lists and bounded nested lists. Wide tables scroll horizontally; links remain non-network text. Code blocks have language labels and copy controls, with horizontal scrolling for long lines and manual expansion for longer content. JetBrains Mono and lightweight highlighting make code easier to scan, while copying preserves the original source.
 
 The Composer stays compact at rest and expands naturally as you type or edit multiline text. All four modes share a more consistent reading width and spacing, with quieter model metadata, reasoning disclosure and message actions.
 
@@ -126,7 +126,7 @@ Requests use your selected provider and model. Sending, retrying and changing mo
 
 ChatGPT uses your account-plan access. DeepSeek uses your configured key and its API billing. Credentials and costs are kept separate for each provider.
 
-The candidate's usage foundation records dispatched model requests and explicitly provider-reported token values at runtime only. Missing values remain unknown, and partial usage retains coverage information. There is no usage dashboard, cost display or persisted usage history yet; these remain future Beta work. Meldwise does not estimate tokens from text length or infer remaining ChatGPT plan quota, reset times or costs.
+Beta 1's internal usage foundation records dispatched model requests and explicitly provider-reported token values at runtime only. Missing values remain unknown, and partial usage retains coverage information. There is no usage dashboard, cost display or persisted usage history yet; these remain future Beta work. Meldwise does not estimate tokens from text length or infer remaining ChatGPT plan quota, reset times or costs.
 
 Disconnecting clears locally available credentials while leaving the remote session intact. Clearing app data or uninstalling removes local records. An uncertain refresh outcome asks you to sign in again.
 
@@ -134,7 +134,7 @@ When reporting a problem, reproduction steps and sanitized diagnostics are enoug
 
 ## Where things stand
 
-Meldwise is preparing its first Beta candidate, not an already published Beta or a feature-complete V1. The product shape of the four core modes is frozen here. Future Beta work may still add usage presentation, History Search, Regenerate, conversation branching, Import/Export and reliability improvements. Broader device coverage, longer-running validation and the full real-device AndroidTest suite are ongoing. SIWC compatibility remains CONDITIONAL. The new common Markdown display additions still await manual visual acceptance.
+Meldwise has entered Beta and remains prerelease software, not a stable production release or a feature-complete V1. The product shape of the four core modes is frozen here. Future Beta work may still add usage/cost presentation, History Search, Regenerate, conversation branching, Import/Export and reliability improvements. Broader device coverage, longer-running validation and the full real-device AndroidTest suite are ongoing. SIWC compatibility remains CONDITIONAL. Markdown and TeX are bounded useful subsets, not full CommonMark/GFM or TeX implementations. There is no WebView; raw HTML and script-like source remain inert text.
 
 Compare currently handles one question at a time. Collaborate uses three stages; Debate uses five. Both retry whole rounds with their original model snapshots, without stage-only continuation. Judge synthesizes answers rather than providing competitive scores or quality guarantees. Tools, image input and OpenAI API-key access remain future directions, along with downgrade recovery for older UI storage formats.
 
