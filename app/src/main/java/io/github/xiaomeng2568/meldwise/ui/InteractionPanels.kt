@@ -39,11 +39,11 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
         confirmButton={MeldwiseTextButton(onClick=onContinue) {Text("继续")}},dismissButton={MeldwiseTextButton(onClick=onCancel) {Text("取消")}})
 }
 
-@Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit,onCollaborate:()->Unit={},selected:HistoryCategory?=null) {
+@Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit,onCollaborate:()->Unit={},selected:HistoryCategory?=null,onDebate:()->Unit={}) {
     PanelColumn("开始") {
         HistoryCategory.entries.forEach {mode ->ModeRow(mode,mode.description,enabled && mode.available,
             onClick=when(mode) {HistoryCategory.Chat->onSingle;HistoryCategory.Compare->onCompare
-                HistoryCategory.Collaborate->onCollaborate;HistoryCategory.Debate->({})},selected=selected==mode)}
+                HistoryCategory.Collaborate->onCollaborate;HistoryCategory.Debate->onDebate},selected=selected==mode)}
     }
 }
 @Composable private fun ModeRow(mode:HistoryCategory,subtitle:String,enabled:Boolean,onClick:()->Unit,

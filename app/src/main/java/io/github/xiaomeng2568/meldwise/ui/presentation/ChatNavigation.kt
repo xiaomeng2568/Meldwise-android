@@ -1,11 +1,11 @@
 package io.github.xiaomeng2568.meldwise.ui.presentation
 
-enum class ChatPanel { None, Settings, Models, Diagnostics, Appearance, Providers, Gallery, CompareSetup, CollaborateSetup, Thinking, History, HistoryChat, HistoryCompare, HistoryCollaborate, Modes }
+enum class ChatPanel { None, Settings, Models, Diagnostics, Appearance, Providers, Gallery, CompareSetup, CollaborateSetup, DebateSetup, Thinking, History, HistoryChat, HistoryCompare, HistoryCollaborate, HistoryDebate, Modes }
 data class ChatNavigation(val stack:List<ChatPanel> = emptyList(),val compareMode:Boolean=false,val composerOptions:Boolean=false) {
     val panel get()=stack.lastOrNull() ?: ChatPanel.None
     val historyCategory get()=when(panel) {
         ChatPanel.HistoryChat->HistoryCategory.Chat;ChatPanel.HistoryCompare->HistoryCategory.Compare
-        ChatPanel.HistoryCollaborate->HistoryCategory.Collaborate;else->null
+        ChatPanel.HistoryCollaborate->HistoryCategory.Collaborate;ChatPanel.HistoryDebate->HistoryCategory.Debate;else->null
     }
     val handlesBack get()=stack.isNotEmpty() || composerOptions || compareMode
     fun open(next:ChatPanel)=if(next==ChatPanel.None) dismiss() else if(panel==next) this else copy(stack=stack+next,composerOptions=false)
@@ -16,7 +16,7 @@ data class ChatNavigation(val stack:List<ChatPanel> = emptyList(),val compareMod
         if(!category.available) return this
         val next=when(category) {
             HistoryCategory.Chat->ChatPanel.HistoryChat;HistoryCategory.Compare->ChatPanel.HistoryCompare
-            HistoryCategory.Collaborate->ChatPanel.HistoryCollaborate;HistoryCategory.Debate->return this
+            HistoryCategory.Collaborate->ChatPanel.HistoryCollaborate;HistoryCategory.Debate->ChatPanel.HistoryDebate
         }
         val root=stack.indexOfLast {it==ChatPanel.History}
         val parent=if(root>=0) copy(stack=stack.take(root+1),composerOptions=false) else open(ChatPanel.History)

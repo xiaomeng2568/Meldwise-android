@@ -25,10 +25,10 @@ class CollaborateUiTest {
     @get:Rule val compose=createAndroidComposeRule<ComponentActivity>()
     private val a=ModelRef("chatgpt","synthetic-a");private val b=ModelRef("deepseek","synthetic-b")
     private val config=CollaborateConfig(CollaborateModel(a,"A"),CollaborateModel(b,"B"))
-    @Test fun collaborationModeSelectionIsLocalAndDebateStaysUnavailable() {
+    @Test fun collaborationModeSelectionIsLocalAndDebateIsAvailable() {
         var selections=0
         compose.setContent {MeldwiseTheme {ModePicker(true,{},{},{selections++})}}
-        compose.onNodeWithText("协作").performClick();compose.onNodeWithText("辩论").assertIsNotEnabled()
+        compose.onNodeWithText("协作").performClick();compose.onNodeWithText("辩论").assertIsEnabled()
         compose.runOnIdle {assertEquals(1,selections)}
     }
     @Test fun sharingCancelMakesZeroSendActions() {

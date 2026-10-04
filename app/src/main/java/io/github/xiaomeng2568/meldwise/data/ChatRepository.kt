@@ -28,18 +28,19 @@ object MessageIds {
         val buffer=java.nio.ByteBuffer.wrap(bytes); return UUID(buffer.long,buffer.long).toString()
     }
 }
-@Serializable enum class ConversationMode { Single, Collaborate }
+@Serializable enum class ConversationMode { Single, Collaborate, Debate }
 @Serializable data class Conversation(val conversationId:String,val selectedRef:ModelRef,
     val messages:List<ChatMessage>,val title:String,val createdAt:Long?=null,val updatedAt:Long?=null,
-    val mode:ConversationMode=ConversationMode.Single,val contextGrants:Set<String> = emptySet(),val schemaVersion:Int=3,
+    val mode:ConversationMode=ConversationMode.Single,val contextGrants:Set<String> = emptySet(),val schemaVersion:Int=4,
     val collaborate:CollaborateConfig?=null,val rounds:List<CollaborateRound> = emptyList(),
-    val collaborateGrants:Set<String> = emptySet()) {
+    val collaborateGrants:Set<String> = emptySet(),val debate:DebateConfig?=null,
+    val debateRounds:List<DebateRound> = emptyList(),val debateGrants:Set<String> = emptySet()) {
     override fun toString()="Conversation(content=[REDACTED])"
 }
 @Serializable private data class LegacySession(val providerId:String,val modelId:String,val messages:List<ChatMessage>,val sessionId:String="")
 @Serializable private data class LegacyJournal(val version:Int=2,val activeProviderId:String=ProviderIds.CHATGPT,
     val activeModelId:String="UNKNOWN",val sessions:List<LegacySession> = emptyList(),val activeSessionId:String="")
-@Serializable private data class ConversationJournal(val version:Int=3,val activeProviderId:String=ProviderIds.CHATGPT,
+@Serializable private data class ConversationJournal(val version:Int=4,val activeProviderId:String=ProviderIds.CHATGPT,
     val activeModelId:String="UNKNOWN",val conversations:List<Conversation> = emptyList(),val activeConversationId:String="")
 class SingleSessionInfo(val id:String,val ref:ModelRef,val title:String,val mode:ConversationMode=ConversationMode.Single) {
     override fun toString()="SingleSessionInfo([REDACTED])"
@@ -51,7 +52,7 @@ fun conversationTitle(text:String):String {
     return normalized.take(normalized.offsetByCodePoints(0,minOf(48,normalized.codePointCount(0,normalized.length))))
 }
 /** Evolves the existing encrypted/atomic journal in place; Compare has its own unchanged journal.
- * Retention stays 32 conversations / 200 messages / 8 MiB. No eviction or network replay.
+ * Retention stays 32 conversations / 200 logical records / 8 MiB ciphertext. No eviction or network replay.
  */
 class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     private val contextBuilder:ConversationContextBuilder=ConversationContextBuilder(),
@@ -62,12 +63,14 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     private var draftId=MessageIds.create()
     private var draftMode=ConversationMode.Single
     private var draftConfig:CollaborateConfig?=null
+    private var draftDebate:DebateConfig?=null
     private var revision=0L
     @Synchronized fun activeRef():ModelRef {load();return ModelRef(journal.activeProviderId,journal.activeModelId)}
     @Synchronized fun activeConversation():Conversation? {load();return current()}
     @Synchronized fun conversationId():String {load();return current()?.conversationId ?: draftId}
     @Synchronized fun mode():ConversationMode {load();return current()?.mode ?: draftMode}
     @Synchronized fun collaborateConfig():CollaborateConfig? {load();return current()?.collaborate ?: draftConfig}
+    @Synchronized internal fun debateConfig():DebateConfig? {load();return current()?.debate ?: draftDebate}
     private fun current()=journal.conversations.firstOrNull {it.conversationId==journal.activeConversationId}
     private fun messages()=current()?.messages ?: emptyList()
     @Synchronized fun activate(ref:ModelRef):List<ChatMessage> {
@@ -94,7 +97,7 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
         val active=id==journal.activeConversationId
         persist(journal.copy(conversations=journal.conversations.filterNot {it.conversationId==id},
             activeConversationId=if(active) "" else journal.activeConversationId))
-        if(active) {draftId=MessageIds.create();draftMode=ConversationMode.Single;draftConfig=null}
+        if(active) {draftId=MessageIds.create();draftMode=ConversationMode.Single;draftConfig=null;draftDebate=null}
         return messages().toList()
     }
     @Synchronized fun moveSession(id:String,direction:Int,mode:ConversationMode?=null) {
@@ -108,12 +111,22 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
         load();validateRef(ref)
         persist(journal.copy(activeProviderId=ref.providerId,activeModelId=ref.modelId,activeConversationId=""))
         draftId=MessageIds.create()
-        draftMode=ConversationMode.Single;draftConfig=null
+        draftMode=ConversationMode.Single;draftConfig=null;draftDebate=null
         return emptyList()
     }
     @Synchronized fun newCollaborate():List<ChatMessage> {
         newSession(activeRef());draftMode=ConversationMode.Collaborate
         return emptyList()
+    }
+    // Internal Debate APIs: no UI route until Phase 7C.
+    @Synchronized internal fun newDebate():List<ChatMessage> {
+        newSession(activeRef());draftMode=ConversationMode.Debate;return emptyList()
+    }
+    @Synchronized internal fun configureDebate(config:DebateConfig) {
+        load();require(mode()==ConversationMode.Debate);validDebateConfig(config)
+        require(current()?.debateRounds?.none {it.lifecycle.active}!=false)
+        val c=current()
+        if(c==null) {draftDebate=config;revision++} else save(c.copy(debate=config,selectedRef=config.modelA.ref))
     }
     @Synchronized fun configureCollaborate(config:CollaborateConfig) {
         load();require(mode()==ConversationMode.Collaborate);validCollaborateConfig(config)
@@ -130,6 +143,7 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     @Synchronized fun load():List<ChatMessage> {
         if(!loaded) {
             val sealed=blob.read()
+            require(sealed==null || sealed.size<=8_388_608)
             var migration=false
             val candidate=if(sealed==null) ConversationJournal() else {
                 val plain=box.open(sealed)
@@ -143,7 +157,17 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
                             require(root["sessions"] is JsonArray && root.containsKey("activeProviderId") && root.containsKey("activeModelId"))
                             migration=true;migrate(json.decodeFromString<LegacyJournal>(source))
                         }
-                        root is JsonObject && root["version"]?.jsonPrimitive?.intOrNull==3 -> json.decodeFromString<ConversationJournal>(source)
+                        root is JsonObject && root["version"]?.jsonPrimitive?.intOrNull==3 -> {
+                            require(root["conversations"] is JsonArray && root.containsKey("activeProviderId") && root.containsKey("activeModelId") && root.containsKey("activeConversationId"))
+                            val old=json.decodeFromString<ConversationJournal>(source)
+                            validate(old,3)
+                            migration=true
+                            old.copy(version=4,conversations=old.conversations.map {it.copy(schemaVersion=4)})
+                        }
+                        root is JsonObject && root["version"]?.jsonPrimitive?.intOrNull==4 -> {
+                            require(root["conversations"] is JsonArray && root.containsKey("activeProviderId") && root.containsKey("activeModelId") && root.containsKey("activeConversationId"))
+                            json.decodeFromString<ConversationJournal>(source)
+                        }
                         else -> error("UNSUPPORTED_CHAT_SCHEMA")
                     }
                 } finally {plain.fill(0)}
@@ -157,7 +181,8 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
                         if(m.reasoning.phase==ReasoningPhase.Completed) ReasoningPhase.Completed
                         else if(m.reasoning.text.isEmpty()) ReasoningPhase.Unavailable else ReasoningPhase.Interrupted))
                 } else m
-            },rounds=c.rounds.map {r ->restoreCollaborate(r).also {if(it!=r) recovery=true}})})
+            },rounds=c.rounds.map {r ->restoreCollaborate(r).also {if(it!=r) recovery=true}},
+                debateRounds=c.debateRounds.map {r ->restoreDebate(r).also {if(it!=r) recovery=true}})})
             // Validate everything before the single atomic write. A failed migration cannot replace old ciphertext with an empty journal.
             if(migration || recovery) persist(recovered) else journal=recovered
             loaded=true
@@ -211,7 +236,7 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     private fun prepareCollaborate(userText:String,retry:CollaborateRound?):PreparedCollaborate {
         load();require(mode()==ConversationMode.Collaborate)
         val config=retry?.config ?: requireNotNull(collaborateConfig());validCollaborateConfig(config)
-        val recent=contextBuilder.build(contextMessages(current()),userText)
+        val recent=contextBuilder.build(conversationContextMessages(current()),userText)
         val context=if(retry==null) recent else VisibleContext(retry.frozenInput.map {LlmMessage(it.role,it.text)},recent.sourceProviders)
         val needs=(config.providers.size>1 || context.sourceProviders.any {it !in config.providers}) &&
             config.providerSetKey !in (current()?.collaborateGrants ?: emptySet())
@@ -266,15 +291,154 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
         val next=c.copy(rounds=c.rounds.map {if(it.roundId==r.roundId) r else it},updatedAt=clock())
         save(next);return next
     }
-    /** Only synthesis becomes the ordinary answer. Intermediate stages stay in local history. */
-    private fun contextMessages(c:Conversation?):List<ChatMessage> {
-        if(c==null) return emptyList()
-        if(c.mode==ConversationMode.Single) return c.messages
-        return c.messages.flatMap {u ->
-            val s=c.rounds.single {it.userMessageId==u.id}.stages.last()
-            if(s.state==CollaborateStageState.Complete) listOf(u,ChatMessage(s.stageId,u.id,MessageRole.ASSISTANT,s.output,
-                MessageState.COMPLETED,modelRef=s.model.ref)) else listOf(u)
+    @Synchronized internal fun prepareDebate(userText:String):PreparedDebate = prepareDebate(userText,null)
+    private fun prepareDebate(userText:String,retry:DebateRound?):PreparedDebate {
+        load();require(mode()==ConversationMode.Debate)
+        val config=retry?.config ?: requireNotNull(debateConfig());validDebateConfig(config)
+        val context=if(retry==null) contextBuilder.build(conversationContextMessages(current()),userText)
+            else VisibleContext(retry.frozenInput.map {LlmMessage(it.role,it.text)},retry.sourceProviders)
+        val needs=debateNeedsSharing(config,context.sourceProviders,current()?.debateGrants ?: emptySet())
+        return PreparedDebate(conversationId(),messages().lastOrNull()?.id,userText,config,context,needs,revision,retry?.roundId,
+            inputRevision=retry?.inputRevision ?: revision)
+    }
+    @Synchronized internal fun prepareDebateRetry(roundId:String):PreparedDebate {
+        load();val c=requireNotNull(current());val r=c.debateRounds.last()
+        require(r.roundId==roundId && !r.lifecycle.active && r.lifecycle!=DebateRoundState.Complete)
+        return prepareDebate(c.messages.single {it.id==r.userMessageId}.text,r)
+    }
+    /** Read-only preflight; beginDebate repeats it after suspended credential checks. */
+    @Synchronized internal fun validateDebateAdmission(plan:PreparedDebate,allowSharing:Boolean=false) {
+        load();require(mode()==ConversationMode.Debate)
+        require(plan.revision==revision && plan.conversationId==conversationId() && plan.previousId==messages().lastOrNull()?.id)
+        validDebateConfig(plan.config)
+        require(plan.retryOf!=null || plan.config==debateConfig())
+        val input=plan.context.messages
+        require(input.size in 1..41 && input.size%2==1 && input.last().text==plan.text)
+        require(input.withIndex().all {(i,m)->m.text.isNotBlank() && m.role==if(i%2==0) MessageRole.USER else MessageRole.ASSISTANT})
+        if(input.sumOf {utf8ContentSize(it.text).toLong()}>131072) throw ProviderFailure(LlmError(ErrorKind.CONTEXT_OVERFLOW))
+        require(plan.context.sourceProviders.all {it in setOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK,"UNKNOWN")})
+        require(plan.requiresSharing==debateNeedsSharing(plan.config,plan.context.sourceProviders,current()?.debateGrants ?: emptySet()))
+        if(plan.requiresSharing && !allowSharing) throw ContextSharingRequired()
+        require(current()?.debateRounds?.none {it.lifecycle.active}!=false)
+        if(plan.retryOf!=null) {
+            val original=requireNotNull(current()).debateRounds.last()
+            require(original.roundId==plan.retryOf && !original.lifecycle.active && original.lifecycle!=DebateRoundState.Complete)
+            require(plan.config==original.config && plan.inputRevision==original.inputRevision && plan.context.sourceProviders==original.sourceProviders)
+            require(input.map {FrozenVisibleInput(it.role,it.text)}==original.frozenInput)
+        } else require(plan.inputRevision==plan.revision)
+        // Reserve all five stage snapshots, even empty/pending ones. One user + five stages = six records.
+        require(recordCount(journal)<=194 && (current()!=null || journal.conversations.size<32))
+    }
+    @Synchronized internal fun beginDebate(plan:PreparedDebate,allowSharing:Boolean=false):Conversation {
+        validateDebateAdmission(plan,allowSharing)
+        return admitDebate(plan,allowSharing)
+    }
+    @Synchronized internal fun beginDebateExecution(plan:PreparedDebate,allowSharing:Boolean=false):Conversation {
+        validateDebateAdmission(plan,allowSharing)
+        return try {admitDebate(plan,allowSharing)} catch(_:Exception) {throw ProviderFailure(LlmError(ErrorKind.STORAGE))}
+    }
+    private fun admitDebate(plan:PreparedDebate,allowSharing:Boolean):Conversation {
+        val time=clock();val user=ChatMessage(MessageIds.create(),messages().lastOrNull()?.id,MessageRole.USER,plan.text,
+            MessageState.COMPLETED,order=messages().size,timestamp=time,modelRef=plan.config.modelA.ref)
+        val round=DebateRound(MessageIds.create(),user.id,plan.config,DebateStageType.entries.map {
+            DebateStage(MessageIds.create(),it,plan.config.modelFor(it))
+        },plan.context.messages.map {FrozenVisibleInput(it.role,it.text)},plan.inputRevision,time,time,
+            retryOf=plan.retryOf,sourceProviders=plan.context.sourceProviders.toSet())
+        val c=current() ?: Conversation(draftId,plan.config.modelA.ref,emptyList(),conversationTitle(plan.text),time,time,
+            mode=ConversationMode.Debate,debate=plan.config)
+        val next=c.copy(messages=c.messages+user,debateRounds=c.debateRounds+round,updatedAt=time,
+            debateGrants=if(plan.requiresSharing && allowSharing) c.debateGrants+plan.config.providerSetKey else c.debateGrants)
+        save(next);return next
+    }
+    @Synchronized internal fun startDebateStage(roundId:String,type:DebateStageType):Conversation {
+        load();val c=requireNotNull(current());require(c.mode==ConversationMode.Debate)
+        val r=c.debateRounds.last();require(r.roundId==roundId && type in DebateDag.readyStages(r))
+        return saveDebateRound(c,r.copy(lifecycle=DebateRoundState.Running,updatedAt=clock(),stages=r.stages.map {
+            if(it.type==type) it.copy(state=DebateStageState.Running,startedAt=clock()) else it
+        }))
+    }
+    @Synchronized internal fun updateDebateStage(roundId:String,stage:DebateStage):Conversation {
+        load();val c=requireNotNull(current());require(c.mode==ConversationMode.Debate)
+        val r=c.debateRounds.last();require(r.roundId==roundId && r.lifecycle.active)
+        val old=r.stages.single {it.stageId==stage.stageId}
+        require(old.state==DebateStageState.Running && stage.type==old.type && stage.model==old.model && stage.startedAt==old.startedAt)
+        require(stage.output.startsWith(old.output) && stage.reasoning.text.startsWith(old.reasoning.text))
+        require(stage.state !in setOf(DebateStageState.Pending,DebateStageState.NotRun))
+        return saveDebateRound(c,settleDebateRound(r.copy(stages=r.stages.map {if(it.stageId==stage.stageId) stage else it}),clock()))
+    }
+    @Synchronized internal fun debateSnapshot(conversationId:String,roundId:String):Conversation {
+        load();return journal.conversations.single {it.conversationId==conversationId}.also {c ->
+            require(c.mode==ConversationMode.Debate && c.debateRounds.last().roundId==roundId)
         }
+    }
+    /** Start the entire dependency-eligible wave atomically, using only durable upstream state. */
+    @Synchronized internal fun startDebateWave(conversationId:String,roundId:String,types:List<DebateStageType>):Conversation {
+        val c=debateSnapshot(conversationId,roundId);val r=c.debateRounds.last()
+        val expected=when {
+            r.stage(DebateStageType.INITIAL_A).state==DebateStageState.Pending->listOf(DebateStageType.INITIAL_A,DebateStageType.INITIAL_B)
+            r.stage(DebateStageType.REVIEW_A_OF_B).state==DebateStageState.Pending->listOf(DebateStageType.REVIEW_A_OF_B,DebateStageType.REVIEW_B_OF_A)
+            else->listOf(DebateStageType.JUDGE)
+        }
+        require(types==expected && r.lifecycle.active && types.all {it in DebateDag.readyStages(r)})
+        val now=clock()
+        return saveDebateExecution(c,r.copy(lifecycle=DebateRoundState.Running,updatedAt=maxOf(now,r.updatedAt),stages=r.stages.map {
+            if(it.type in types) it.copy(state=DebateStageState.Running,startedAt=now) else it
+        }))
+    }
+    /** The exact immutable Running object is the local CAS token (no schema field is added).
+     * Merge by stage ID into the CURRENT round, never a worker's stale sibling snapshot.
+     * Failure settlement is called only after the executor has joined all active transports.
+     * null means stale/terminal: no write, no revival, and no change to another conversation.
+     */
+    @Synchronized internal fun commitDebateStages(conversationId:String,roundId:String,changes:List<DebateStageChange>):Conversation? {
+        val c=debateSnapshot(conversationId,roundId);val r=c.debateRounds.last()
+        require(changes.isNotEmpty() && changes.map {it.expected.stageId}.distinct().size==changes.size)
+        if(!r.lifecycle.active || changes.any {change ->r.stages.none {it===change.expected && it.state==DebateStageState.Running}}) return null
+        changes.forEach {(old,next)->
+            require(next.stageId==old.stageId && next.type==old.type && next.model==old.model && next.startedAt==old.startedAt)
+            require(next.state !in setOf(DebateStageState.Pending,DebateStageState.NotRun))
+            require(next.output.startsWith(old.output) && next.reasoning.text.startsWith(old.reasoning.text))
+        }
+        val replacements=changes.associate {it.expected.stageId to it.next}
+        return saveDebateExecution(c,settleDebateRound(r.copy(stages=r.stages.map {replacements[it.stageId] ?: it}),clock()))
+    }
+    @Synchronized internal fun cancelDebateExecution(conversationId:String,roundId:String):Conversation {
+        val c=debateSnapshot(conversationId,roundId);val r=c.debateRounds.last()
+        if(!r.lifecycle.active) return c
+        val seed=r.stages.firstOrNull {it.state==DebateStageState.Running} ?: r.stages.first {it.state==DebateStageState.Pending}
+        return saveDebateExecution(c,settleDebateRound(r.copy(stages=r.stages.map {s ->
+            if(s===seed || s.state==DebateStageState.Running) s.copy(state=DebateStageState.Cancelled,error=ErrorKind.CANCELLED,
+                endedAt=maxOf(clock(),s.startedAt ?: 0),reasoning=interruptedDebateReasoning(s.reasoning)) else s
+        }),clock()))
+    }
+    @Synchronized internal fun interruptDebateExecution(conversationId:String,roundId:String):Conversation {
+        val c=debateSnapshot(conversationId,roundId);val r=c.debateRounds.last()
+        if(!r.lifecycle.active) return c
+        val restored=restoreDebate(r).let {it.copy(stages=it.stages.map {s ->
+            if(s.state==DebateStageState.Interrupted) s.copy(error=ErrorKind.STREAM_INTERRUPTED,
+                endedAt=maxOf(clock(),s.startedAt ?: 0)) else s
+        },updatedAt=maxOf(clock(),it.updatedAt))}
+        return saveDebateExecution(c,restored)
+    }
+    /** Execution belongs to its admitted conversation, even if navigation changes the active one. */
+    private fun saveDebateExecution(c:Conversation,r:DebateRound):Conversation {
+        val next=c.copy(debateRounds=c.debateRounds.map {if(it.roundId==r.roundId) r else it},updatedAt=maxOf(clock(),c.updatedAt ?: 0))
+        persist(journal.copy(conversations=journal.conversations.map {if(it.conversationId==c.conversationId) next else it}))
+        return next
+    }
+    @Synchronized internal fun cancelDebateRound(roundId:String):Conversation {
+        load();val c=requireNotNull(current());require(c.mode==ConversationMode.Debate)
+        val r=c.debateRounds.last();require(r.roundId==roundId)
+        if(!r.lifecycle.active) return c
+        val seed=r.stages.firstOrNull {it.state==DebateStageState.Running} ?: r.stages.first {it.state==DebateStageState.Pending}
+        return saveDebateRound(c,settleDebateRound(r.copy(stages=r.stages.map {s ->
+            if(s.stageId==seed.stageId || s.state==DebateStageState.Running) s.copy(state=DebateStageState.Cancelled,
+                error=ErrorKind.CANCELLED,endedAt=clock(),reasoning=interruptedDebateReasoning(s.reasoning)) else s
+        }),clock()))
+    }
+    private fun saveDebateRound(c:Conversation,r:DebateRound):Conversation {
+        val next=c.copy(debateRounds=c.debateRounds.map {if(it.roundId==r.roundId) r else it},updatedAt=clock())
+        save(next);return next
     }
     @Synchronized fun update(id:String,text:String,state:MessageState,reasoning:ReasoningRecord?=null):List<ChatMessage> {
         load();require(text.length<=4_194_304)
@@ -288,16 +452,23 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
         val rows=if(found) journal.conversations.map {if(it.conversationId==c.conversationId) c else it} else journal.conversations+c
         persist(journal.copy(conversations=rows,activeConversationId=c.conversationId,activeProviderId=c.selectedRef.providerId,activeModelId=c.selectedRef.modelId))
     }
-    // A Collaborate user + three stage outputs count as four records, including pending/empty stages.
-    private fun recordCount(value:ConversationJournal)=value.conversations.sumOf {it.messages.size+it.rounds.sumOf {r ->r.stages.size}}
-    private fun validate(value:ConversationJournal) {
-        require(value.version==3 && value.conversations.size<=32 && recordCount(value)<=200)
+    // Reserve pending/empty stages too: Collaborate user + 3 stages = 4; Debate user + 5 stages = 6.
+    private fun recordCount(value:ConversationJournal)=value.conversations.sumOf {
+        it.messages.size+it.rounds.sumOf {r ->r.stages.size}+it.debateRounds.sumOf {r->r.stages.size}
+    }
+    private fun validate(value:ConversationJournal,version:Int=4) {
+        require(value.version==version && value.conversations.size<=32 && recordCount(value)<=200)
         validateRef(ModelRef(value.activeProviderId,value.activeModelId))
         require(value.conversations.map {it.conversationId}.distinct().size==value.conversations.size)
         value.conversations.forEach {c ->
-            require(c.schemaVersion==3 && c.conversationId.length in 1..160)
-            if(c.mode==ConversationMode.Single) require(c.rounds.isEmpty() && c.collaborate==null && c.collaborateGrants.isEmpty())
-            else validateCollaborate(c)
+            require(c.schemaVersion==version && c.conversationId.length in 1..160)
+            if(version==3 || c.mode!=ConversationMode.Debate) require(c.debate==null && c.debateRounds.isEmpty() && c.debateGrants.isEmpty())
+            if(version==3) require(c.mode!=ConversationMode.Debate)
+            when(c.mode) {
+                ConversationMode.Single->require(c.rounds.isEmpty() && c.collaborate==null && c.collaborateGrants.isEmpty())
+                ConversationMode.Collaborate->validateCollaborate(c)
+                ConversationMode.Debate->validateDebate(c)
+            }
             validateRef(c.selectedRef)
             require(c.title.length<=192 && c.contextGrants.all {it in setOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK)})
             require(c.createdAt==null || c.createdAt>=0);require(c.updatedAt==null || c.updatedAt>=0)
@@ -348,6 +519,10 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     private fun persist(value:ConversationJournal) {
         validate(value)
         val plain=json.encodeToString(value).toByteArray(Charsets.UTF_8)
-        try {require(plain.size<=8_388_608);blob.write(box.seal(plain));journal=value;revision++} finally {plain.fill(0)}
+        try {
+            require(plain.size<=8_388_608-29)
+            val encrypted=box.seal(plain);require(encrypted.size<=8_388_608)
+            blob.write(encrypted);journal=value;revision++
+        } finally {plain.fill(0)}
     }
 }

@@ -70,7 +70,7 @@ class UiRefinementTests {
     @Test fun unrelatedSingleErrorStillHasOneFeedbackOwner() {assertTrue(showComposerError("PLAN_USAGE_LIMIT",emptySet()))}
     @Test fun backClosesChildBeforeHistoryRoot() {val n=ChatNavigation().open(ChatPanel.Settings).open(ChatPanel.History).openHistory(HistoryCategory.Compare);assertEquals(ChatPanel.History,n.back().panel);assertEquals(ChatPanel.Settings,n.back().back().panel);assertEquals(ChatPanel.None,n.back().back().back().panel)}
     @Test fun outsideDismissKeepsModeAndCreatesNoNavigationEntry() {val n=ChatNavigation(compareMode=true).open(ChatPanel.CompareSetup).open(ChatPanel.Models);val dismissed=n.dismiss();assertEquals(ChatPanel.None,dismissed.panel);assertTrue(dismissed.compareMode)}
-    @Test fun historyCategoriesStillHaveOnlyThreeRealModes() {assertEquals(3,HistoryCategory.entries.count {it.available});assertEquals("暂未开放",HistorySummary(HistoryCategory.Debate,0).label)}
+    @Test fun historyCategoriesHaveFourRealModesAfter7C() {assertEquals(4,HistoryCategory.entries.count {it.available});assertEquals("0 条记录",HistorySummary(HistoryCategory.Debate,0).label)}
     @Test fun modeRowsReusePressPrimitiveWithoutIdleCards() {val s=ui("InteractionPanels.kt").substringAfter("@Composable private fun ModeRow").substringBefore("@Composable internal fun HistoryPanel");assertTrue(s.contains("MeldwiseSurface("));assertTrue(s.contains("else Color.Transparent"));assertTrue(s.contains("this.selected=selected"))}
     @Test fun topSubtitleStillHasOneLineEllipsis() {val s=ui("components/ModelTitle.kt");assertTrue(s.contains("maxLines=1,overflow=TextOverflow.Ellipsis"));assertTrue(s.indexOf("modelTitleArrow")<s.indexOf("modelSubtitle"))}
     @Test fun lightSemanticTextRemainsReadable() {colors(false)}
