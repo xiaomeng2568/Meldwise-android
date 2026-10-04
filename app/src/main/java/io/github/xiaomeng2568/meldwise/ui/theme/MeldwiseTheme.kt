@@ -44,8 +44,8 @@ private val dark = darkColorScheme(
     surfaceVariant=Color(0xFF2B2A33), onSurfaceVariant=Color(0xFFBBB6C5), outline=Color(0xFF928D9C),
     outlineVariant=Color(0xFF3B3845), error=Color(0xFFFFB3B5), errorContainer=Color(0xFF4D292E), onErrorContainer=Color(0xFFFFDADC))
 private val type = Typography(
-    headlineMedium=TextStyle(fontSize=28.sp,lineHeight=38.sp,fontWeight=FontWeight.SemiBold),
-    titleLarge=TextStyle(fontSize=22.sp,lineHeight=30.sp,fontWeight=FontWeight.SemiBold),
+    headlineMedium=TextStyle(fontSize=28.sp,lineHeight=38.sp,fontWeight=FontWeight.Medium),
+    titleLarge=TextStyle(fontSize=22.sp,lineHeight=30.sp,fontWeight=FontWeight.Medium),
     titleMedium=TextStyle(fontSize=17.sp,lineHeight=25.sp,fontWeight=FontWeight.Medium),
     bodyLarge=TextStyle(fontSize=17.sp,lineHeight=28.sp), bodyMedium=TextStyle(fontSize=15.sp,lineHeight=24.sp),
     bodySmall=TextStyle(fontSize=13.sp,lineHeight=20.sp), labelLarge=TextStyle(fontSize=14.sp,lineHeight=20.sp,fontWeight=FontWeight.Medium),

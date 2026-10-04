@@ -39,7 +39,6 @@ fun preferenceLabel(p:ReasoningPreference)=when(p) {ReasoningPreference.Off->"�
                 }
             }
         }
-        Text("按 DeepSeek API 计费",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 @Composable internal fun CompareContent(run:CompareRun,catalogs:Map<String,List<LlmModel>>) {

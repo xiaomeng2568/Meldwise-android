@@ -6,9 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import io.github.xiaomeng2568.meldwise.auth.AuthState
 import io.github.xiaomeng2568.meldwise.provider.*
 import io.github.xiaomeng2568.meldwise.network.InferenceDiagnostic
@@ -93,6 +95,7 @@ private typealias Panel = ChatPanel
     }
     val list=rememberLazyListState()
     val compareList=rememberLazyListState()
+    val transcript=if(compareMode) compareList else list
     val compareItems=remember(foundation.run,foundation.catalogs) {foundation.run?.let {compareMessageItems(it,foundation.catalogs)} ?: emptyList()}
     val collaborateItems=remember(foundation.conversation) {foundation.conversation?.takeIf {it.mode==ConversationMode.Collaborate}?.let(::collaborateMessageItems) ?: emptyList()}
     val keyboardVisible=WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)>0
@@ -113,32 +116,34 @@ private typealias Panel = ChatPanel
     LaunchedEffect(screen.messages.lastOrNull {it.role==MessageRole.USER}?.id) {
         if(!compareMode && screen.messages.lastOrNull {it.role==MessageRole.USER}?.text==input) input=""
     }
-    LaunchedEffect(list) {
-        snapshotFlow {list.isScrollInProgress}.collect {scrolling ->
-            if(scrolling) followLatest=false else followLatest=!list.canScrollForward
+    LaunchedEffect(transcript) {
+        snapshotFlow {transcript.isScrollInProgress}.collect {scrolling ->
+            if(scrolling) followLatest=false else followLatest=!transcript.canScrollForward
         }
     }
     // Follow the bottom until the reader scrolls away. Provider messages remain untouched.
-    val visibleCount=if(collaborateMode) collaborateItems.size else screen.messages.size
-    val lastVisibleLength=if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.sumOf {it.output.length+it.reasoning.text.length} else screen.messages.lastOrNull()?.text?.length
-    LaunchedEffect(visibleCount,screen.historyRef) {
+    val visibleCount=if(compareMode) compareItems.size else if(collaborateMode) collaborateItems.size else screen.messages.size
+    val lastVisibleLength=if(compareMode) foundation.run?.outputs?.sumOf {it.output.length+it.reasoning.text.length}
+        else if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.sumOf {it.output.length+it.reasoning.text.length}
+        else screen.messages.lastOrNull()?.let {it.text.length+it.reasoning.text.length}
+    LaunchedEffect(transcript,visibleCount,screen.historyRef,foundation.conversation?.conversationId,foundation.run?.id) {
         followLatest=true
-        if(visibleCount>0) list.scrollToItem(visibleCount-1)
+        if(visibleCount>0) transcript.scrollToItem(visibleCount-1)
     }
     LaunchedEffect(lastVisibleLength) {
         withFrameNanos { }
-        if(followLatest && !list.isScrollInProgress) {
-            val last=list.layoutInfo.visibleItemsInfo.lastOrNull()
+        if(followLatest && !transcript.isScrollInProgress) {
+            val last=transcript.layoutInfo.visibleItemsInfo.lastOrNull()
             if(last?.index==visibleCount-1) {
-                val extra=(last.offset+last.size-list.layoutInfo.viewportEndOffset).coerceAtLeast(0)
-                if(extra>0) list.scrollBy(extra.toFloat())
+                val extra=(last.offset+last.size-transcript.layoutInfo.viewportEndOffset).coerceAtLeast(0)
+                if(extra>0) transcript.scrollBy(extra.toFloat())
             }
         }
     }
     Box(Modifier.fillMaxSize()) {
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),horizontalAlignment=Alignment.CenterHorizontally) {
-            Row(Modifier.widthIn(max=Sizes.contentMax).fillMaxWidth().padding(horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
+            Row(Modifier.widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().padding(horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
                 SoftAction(Glyph.Menu,"打开菜单",{navigation=navigation.open(Panel.Settings)},tonal=false)
                 ModelTitle(if(compareMode) "对比" else if(collaborateMode) "协作" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),
                     if(compareMode || collaborateMode) listOfNotNull(modelA,modelB).joinToString(if(collaborateMode) " → " else " × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
@@ -146,8 +151,8 @@ private typealias Panel = ChatPanel
                 SoftAction(Glyph.Plus,"选择对话模式",{navigation=navigation.open(Panel.Modes)},enabled=!screen.busy,tonal=false)
             }
             if(compareMode) {
-                LazyColumn(Modifier.weight(1f).widthIn(max=Sizes.contentMax).fillMaxWidth().testTag("compareMessageFlow"),state=compareList,
-                    contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.wide)) {
+                LazyColumn(Modifier.weight(1f).widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().testTag("compareMessageFlow"),state=compareList,
+                    contentPadding=PaddingValues(horizontal=MeldwiseContentMetrics.conversationInset,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(MeldwiseContentMetrics.messageGap)) {
                     if(compareItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large)) {
                         Text("把同一个问题交给两个模型。",style=MaterialTheme.typography.titleMedium)
                         MeldwiseTextButton(onClick={navigation=navigation.open(Panel.CompareSetup)}) {Text("选择模型")}
@@ -155,8 +160,8 @@ private typealias Panel = ChatPanel
                     items(compareItems,key={it.key}) {CompareMessage(it)}
                 }
             } else if(collaborateMode) {
-                LazyColumn(Modifier.weight(1f).widthIn(max=Sizes.contentMax).fillMaxWidth().testTag("collaborateMessageFlow"),state=list,
-                    contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.large)) {
+                LazyColumn(Modifier.weight(1f).widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().testTag("collaborateMessageFlow"),state=list,
+                    contentPadding=PaddingValues(horizontal=MeldwiseContentMetrics.conversationInset,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(MeldwiseContentMetrics.stageGap)) {
                     if(collaborateItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large)) {
                         Text("先回答，再审阅，最后整理。",style=MaterialTheme.typography.titleMedium)
                         MeldwiseTextButton(onClick={navigation=navigation.open(Panel.CollaborateSetup)}) {Text("选择协作模型")}
@@ -172,34 +177,41 @@ private typealias Panel = ChatPanel
                     Text("今天想聊些什么？",style=MaterialTheme.typography.headlineMedium)
                 }
             } else {
-                LazyColumn(Modifier.weight(1f).widthIn(max=Sizes.contentMax).fillMaxWidth(),state=list,
-                    contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.large)) {
+                LazyColumn(Modifier.weight(1f).widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth(),state=list,
+                    contentPadding=PaddingValues(horizontal=MeldwiseContentMetrics.conversationInset,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(MeldwiseContentMetrics.messageGap)) {
                     items(screen.messages,key={it.id}) {message ->
                         MessageCard(message,screen.historyRef,name,if(processing.messageId==message.id) processing.seconds else null,
                             onDetails={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)})
                     }
                 }
             }
-            Column(Modifier.widthIn(max=Sizes.contentMax).fillMaxWidth().padding(horizontal=Space.content),verticalArrangement=Arrangement.spacedBy(Space.small)) {
-                screen.error?.let {
-                    Surface(shape=Radius.surface,color=MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Row(Modifier.fillMaxWidth().padding(start=Space.content),verticalAlignment=Alignment.CenterVertically) {
+            val background=MaterialTheme.colorScheme.background
+            val displayedErrors=if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.mapNotNull {it.error?.name}?.toSet() ?: emptySet() else emptySet()
+            Column(Modifier.widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().drawBehind {
+                val height=MeldwiseContentMetrics.composerFade.toPx()
+                drawRect(Brush.verticalGradient(listOf(background.copy(alpha=0f),background),startY=-height,endY=0f),
+                    topLeft=Offset(0f,-height),size=Size(size.width,height))
+            }.padding(horizontal=MeldwiseContentMetrics.composerInset),verticalArrangement=Arrangement.spacedBy(Space.small)) {
+                screen.error?.takeIf {showComposerError(it,displayedErrors)}?.let {
+                        Row(Modifier.fillMaxWidth().padding(start=Space.micro),verticalAlignment=Alignment.CenterVertically) {
                             Text(errorLabel(it),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
                             MeldwiseTextButton(onClick={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)}) {Text("详情")}
                         }
-                    }
                 }
                 if(!compareMode && !collaborateMode && !ready && !screen.busy) MeldwiseTextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
                     Text(if(chatgpt) "连接 ChatGPT 后开始聊天" else "配置 DeepSeek 密钥后开始聊天")
                 }
-                Composer(input,{if(it.length<=32768) input=it},screen.busy,
+                val summary=composerSummary(if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else HistoryCategory.Chat,
+                    if(screen.selected==null) "选择模型" else name,if(chatgpt) "默认" else preferenceLabel(foundation.thinking),reviewIntensityLabel(reviewIntensity))
+                AdaptiveComposer(input,{if(it.length<=32768) input=it},screen.busy,
                     input.isNotBlank() && if(compareMode || collaborateMode) available(modelA) && available(modelB) && modelA!=modelB &&
                         (!collaborateMode || foundation.collaborate?.primary?.ref==modelA && foundation.collaborate?.reviewer?.ref==modelB) else ready && screen.selected!=null,
                     onSend={if(compareMode) {val a=modelA;val b=modelB;if(a!=null && b!=null) actions.compare(CompareSubmission(input,a,b,effortA,effortB));input=""} else actions.send(input)},
                     onStop=actions.cancel,onThinking={navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Thinking)},
-                    compareMode=compareMode,thinking=foundation.thinking!=ReasoningPreference.Off && chatgpt.not(),
+                    compareMode=compareMode,option=composerOption(compareMode || collaborateMode,foundation.thinking!=ReasoningPreference.Off && chatgpt.not()),
                     options=navigation.composerOptions,onOptions={navigation=navigation.copy(composerOptions=it)},
-                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else "发送消息")
+                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else "发送消息",
+                    imeVisible=keyboardVisible,summary=summary,onConfiguration={pickingLane=null;navigation=navigation.open(summary.configuration)})
                 Text(if(compareMode || collaborateMode) "按各自服务计费 · 记录留在本机" else if(chatgpt) "ChatGPT 套餐" else "DeepSeek API 计费",
                     style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier=Modifier.align(Alignment.CenterHorizontally).padding(bottom=Space.small))
@@ -235,10 +247,13 @@ private typealias Panel = ChatPanel
                 Panel.CompareSetup,Panel.CollaborateSetup -> PanelColumn(if(activePanel==Panel.CollaborateSetup) "协作" else "对比") {
                     listOf("A" to modelA,"B" to modelB).forEach {(id,ref) ->
                             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
-                                MeldwiseTextButton(enabled=!screen.busy,onClick={pickingLane=id;navigation=navigation.open(Panel.Models)}) {
-                                    Text("${if(activePanel==Panel.CollaborateSetup) if(id=="A") "主模型 A" else "审阅模型 B" else "模型 $id"}：${ref?.let {modelLabel(it,foundation.catalogs[it.providerId]?.firstOrNull {m ->m.id==it.modelId}?.displayName ?: it.modelId)} ?: "请选择"}")
+                                MeldwiseTextButton(enabled=!screen.busy,onClick={pickingLane=id;navigation=navigation.open(Panel.Models)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch)) {
+                                    Text("${if(activePanel==Panel.CollaborateSetup) if(id=="A") "主模型 A" else "审阅模型 B" else "模型 $id"}：${ref?.let {modelLabel(it,foundation.catalogs[it.providerId]?.firstOrNull {m ->m.id==it.modelId}?.displayName ?: it.modelId)} ?: "请选择"}",
+                                        Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis)
+                                    MeldwiseIcon(Glyph.Forward,opticalSize=18.dp)
                                 }
-                                ref?.let {ThinkingChoices(it,if(id=="A") effortA else effortB,enabled=!screen.busy) {p ->if(id=="A") {effortA=p;applyCollaborate(pa=p)} else {effortB=p;applyCollaborate(pb=p)}}
+                                ref?.let {Text(if(it.providerId==ProviderIds.CHATGPT) "思考 · 模型默认" else "思考 · ${preferenceLabel(if(id=="A") effortA else effortB)}",
+                                        style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(horizontal=Space.medium))
                                     if(!available(it)) Text("先配置账号并加载模型。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                     }
@@ -286,6 +301,8 @@ private typealias Panel = ChatPanel
                     SettingsRow("历史","对话、对比与协作",{navigation=navigation.open(Panel.History)})
                     SettingsRow("提供方与账号","ChatGPT 套餐 / DeepSeek API",{navigation=navigation.open(Panel.Providers)})
                     SettingsRow("外观","主题与重点色",{navigation=navigation.open(Panel.Appearance)})
+                    HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant,modifier=Modifier.padding(vertical=Space.small))
+                    Text("开发者",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     SettingsRow("诊断","只含脱敏状态",{noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)})
                     SettingsRow("组件预览","开发者选项",{navigation=navigation.open(Panel.Gallery)})
                     if(chatgpt) MeldwiseTextButton(enabled=!screen.busy,onClick={actions.showLegacy();navigation=navigation.dismiss()}) {Text("查看旧版 ChatGPT 记录")}
@@ -304,31 +321,6 @@ private typealias Panel = ChatPanel
     }
 }
 
-@Composable private fun Composer(input: String, onInput: (String)->Unit, busy: Boolean, canSend: Boolean,
-    onSend: ()->Unit, onStop: ()->Unit,onThinking:()->Unit,compareMode:Boolean,thinking:Boolean,
-    options:Boolean,onOptions:(Boolean)->Unit,sendLabel:String) {
-    Box(Modifier.fillMaxWidth().testTag("composer").animateContentSize(tween(Motion.switchMs,easing=Motion.easing))) {
-        Surface(Modifier.matchParentSize().padding(vertical=Sizes.composerInset).testTag("composerSurface"),shape=Radius.surface,
-            color=MaterialTheme.colorScheme.surfaceContainerLow) {}
-        Column {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                SoftAction(Glyph.Plus,"更多输入选项",{onOptions(!options)},enabled=!busy,tonal=false)
-                BasicTextField(value=input,onValueChange=onInput,enabled=!busy,textStyle=MaterialTheme.typography.bodyLarge.copy(color=MaterialTheme.colorScheme.onSurface),
-                    cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),minLines=1,maxLines=5,
-                    modifier=Modifier.weight(1f).heightIn(min=Sizes.composerInputMin,max=Sizes.composerMax).padding(horizontal=Space.small,vertical=Space.micro).semantics {contentDescription="消息输入框"},
-                    decorationBox={field -> Box(contentAlignment=Alignment.CenterStart) {
-                        if(input.isEmpty()) Text("发消息…",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant);field()
-                    }})
-                SoftAction(if(busy) Glyph.Stop else Glyph.Send,if(busy) if(compareMode) "取消全部" else "停止当前操作" else sendLabel,
-                    if(busy) onStop else onSend,enabled=busy || canSend,primary=true)
-            }
-            if(options) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-                MeldwiseFilterChip(selected=thinking,onClick={onOptions(false);onThinking()},enabled=!busy,label={Text("思考")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
-                MeldwiseTextButton(enabled=false,onClick={}) {Text("附件")}
-            }
-        }
-    }
-}
 @Composable internal fun PanelColumn(title: String, content: @Composable ColumnScope.()->Unit) {
     val pixels=androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
     val height=with(androidx.compose.ui.platform.LocalDensity.current) {pixels.toDp()*Sizes.sheetFraction}
@@ -339,10 +331,13 @@ private typealias Panel = ChatPanel
     }
 }
 @Composable private fun SettingsRow(title: String, subtitle: String, onClick: ()->Unit) {
-    MeldwiseSurface(onClick=onClick,shape=Radius.medium,color=MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().heightIn(min=Sizes.touch).padding(Space.content)) {
+    MeldwiseSurface(onClick=onClick,shape=Radius.medium,color=androidx.compose.ui.graphics.Color.Transparent) {
+        Row(Modifier.fillMaxWidth().heightIn(min=Sizes.touch).padding(vertical=Space.medium,horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
+        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
             Text(title,style=MaterialTheme.typography.titleMedium)
             Text(subtitle,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        MeldwiseIcon(Glyph.Forward,opticalSize=18.dp)
         }
     }
 }
@@ -352,7 +347,7 @@ private typealias Panel = ChatPanel
         Notice("本地排版示例。这里的文字、状态与模型标识仅用于预览。")
         ContentRenderer(remember {ContentParser.parse("# 清晰一点\n\n普通段落支持 **重点**、*强调* 和 `inline code`。\n\n- 留出呼吸感\n- 内容优先\n\n> 一句值得记下来的话。\n\n```text\n  原样保留空格\n  **这里是纯文本**\n```\n\n```kotlin\nfun hello(): String {\n    return \"Hello\"\n}\n```")})
         ReasoningPanel(remember {ReasoningSummary(ReasoningState.Completed,"这是本地排版示例。")})
-        CompareResultCard(CompareLane(ModelRef(ProviderIds.CHATGPT,"preview-a"),"示例模型 A",LaneState.Completed,"一张卡片只展示自己的回答与状态。"))
-        CompareResultCard(CompareLane(ModelRef(ProviderIds.DEEPSEEK,"preview-b"),"示例模型 B",LaneState.Incomplete,"另一张卡片可以独立保持未完成。"))
+        CompareResultCard(CompareLane(ModelRef(ProviderIds.CHATGPT,"preview-a"),"示例模型 A",LaneState.Completed,"两个模型独立回答，各自保留内容与状态。"))
+        CompareResultCard(CompareLane(ModelRef(ProviderIds.DEEPSEEK,"preview-b"),"示例模型 B",LaneState.Incomplete,"另一份回答可以独立保持未完成。"))
     }
 }

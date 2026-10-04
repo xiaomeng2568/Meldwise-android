@@ -46,9 +46,9 @@ class CollaborateUiTest {
         val stage=CollaborateStage("s",CollaborateStageType.REVIEW,1,config.reviewer,"Visible answer",
             ReasoningRecord("Synthetic visible reasoning",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Completed),CollaborateStageState.Complete)
         compose.setContent {MeldwiseTheme {Column {CollaborateMessage(CollaborateMessageItem.Stage("round",stage))}}}
-        compose.onNodeWithTag("assistantOutput").assertExists();compose.onNodeWithText("审阅").assertExists()
+        compose.onNodeWithTag("assistantOutput").assertExists();compose.onNodeWithText("审阅 · 标准").assertExists()
         compose.onNodeWithText("Visible answer").assertExists();compose.onNodeWithText("Synthetic visible reasoning").assertDoesNotExist()
-        compose.onNodeWithText("查看思考过程").performClick();compose.onNodeWithText("Synthetic visible reasoning").assertExists()
+        compose.onNodeWithContentDescription("查看思考过程").performClick();compose.onNodeWithText("Synthetic visible reasoning").assertExists()
     }
     @Test fun planLimitShowsStageSpecificSafeDetails() {
         val stage=CollaborateStage("s",CollaborateStageType.INITIAL,0,config.primary,state=CollaborateStageState.Failed,error=ErrorKind.PLAN_USAGE_LIMIT)

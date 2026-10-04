@@ -16,7 +16,7 @@ import androidx.compose.ui.res.painterResource
 import io.github.xiaomeng2568.meldwise.R
 import io.github.xiaomeng2568.meldwise.ui.theme.Sizes
 
-enum class Glyph { Menu, Plus, Chevron, Forward, Send, Stop, Copy, Back, More, Close, Check, Chat, Compare, Collaborate, Debate }
+enum class Glyph { Menu, Plus, Chevron, Forward, Send, Stop, Copy, Back, More, Close, Check, Code, Chat, Compare, Collaborate, Debate }
 /** Original geometric icons. Accessibility labels belong to their interactive parent. */
 @Composable fun MeldwiseIcon(glyph: Glyph, modifier: Modifier = Modifier, opticalSize:androidx.compose.ui.unit.Dp=Sizes.icon) {
     val vector=when(glyph) {Glyph.Chat->ModeIcons.chat;Glyph.Compare->ModeIcons.compare
@@ -42,6 +42,7 @@ enum class Glyph { Menu, Plus, Chevron, Forward, Send, Stop, Copy, Back, More, C
                 Glyph.More -> { listOf(5f,12f,19f).forEach { drawCircle(color,1.6f,Offset(it,12f)) } }
                 Glyph.Close -> { line(6f,6f,18f,18f);line(18f,6f,6f,18f) }
                 Glyph.Check -> { line(5f,12f,10f,17f);line(10f,17f,20f,7f) }
+                Glyph.Code -> { line(6f,7f,2f,12f);line(2f,12f,6f,17f);line(18f,7f,22f,12f);line(22f,12f,18f,17f);line(14f,5f,10f,19f) }
                 Glyph.Chat,Glyph.Compare,Glyph.Collaborate,Glyph.Debate -> Unit
             }
         }

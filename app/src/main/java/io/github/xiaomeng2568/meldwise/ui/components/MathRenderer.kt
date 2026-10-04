@@ -25,6 +25,7 @@ import ru.wertik.orcex.font.stix2.StixTwoMath
 import ru.wertik.orcex.layout.*
 import ru.wertik.orcex.render.android.*
 import io.github.xiaomeng2568.meldwise.ui.content.*
+import io.github.xiaomeng2568.meldwise.ui.theme.inlineCodeSpan
 import kotlin.math.ceil
 
 private class NativeMath(val typeface:Typeface,val layout:MathLayout)
@@ -90,7 +91,7 @@ private object MathWorker {
                 } else withStyle(when(run.style) {
                     InlineStyle.Strong->SpanStyle(fontWeight=FontWeight.Bold)
                     InlineStyle.Emphasis->SpanStyle(fontStyle=FontStyle.Italic)
-                    InlineStyle.Code->SpanStyle(fontFamily=FontFamily.Monospace,background=colors.surfaceVariant)
+                    InlineStyle.Code->inlineCodeSpan(colors.surfaceVariant)
                     else->SpanStyle()
                 }) {append(run.text)}
             }

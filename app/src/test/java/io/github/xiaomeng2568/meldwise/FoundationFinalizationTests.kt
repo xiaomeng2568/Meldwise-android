@@ -61,6 +61,6 @@ class FoundationFinalizationTests {
     @Test fun singleAndCompareUseSameRenderer() {
         val source=File(System.getProperty("projectRoot"),"app/src/main/java/io/github/xiaomeng2568/meldwise/ui/components/MessageCard.kt").readText()
         assertTrue(source.contains("AssistantOutput(CompareLane(snapshot,"));assertTrue(source.contains("CompareResultCard(lane:CompareLane,modifier:Modifier=Modifier)=AssistantOutput(lane,modifier)"))
-        assertEquals(1,Regex("ContentRenderer\\(").findAll(source).count());assertTrue(source.contains("MessageActions(lane.answer)"))
+        assertEquals(1,Regex("ContentRenderer\\(").findAll(source).count());assertTrue(source.contains("MessageActions(lane.answer,plain,"))
     }
 }

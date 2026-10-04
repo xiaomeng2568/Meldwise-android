@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
@@ -48,10 +49,10 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
 @Composable private fun ModeRow(mode:HistoryCategory,subtitle:String,enabled:Boolean,onClick:()->Unit,
     selected:Boolean=false,forward:Boolean=false) {
     val colors=MaterialTheme.colorScheme
-    MeldwiseSurface(onClick=onClick,enabled=enabled,shape=Radius.bubble,
-        color=if(selected) colors.primaryContainer else colors.surfaceContainerLow,
+    MeldwiseSurface(onClick=onClick,enabled=enabled,shape=Radius.medium,
+        color=if(selected) colors.primaryContainer else Color.Transparent,
         modifier=Modifier.testTag("modeRow-${mode.name}").semantics {this.selected=selected}) {
-        Row(Modifier.fillMaxWidth().heightIn(min=Sizes.modeRowMin).padding(Space.section),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.content)) {
+        Row(Modifier.fillMaxWidth().heightIn(min=Sizes.modeRowMin).padding(horizontal=Space.small,vertical=Space.medium),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.content)) {
             CompositionLocalProvider(LocalContentColor provides if(enabled) colors.primary else colors.onSurfaceVariant.copy(alpha=.45f)) {
                 val glyph=when(mode) {HistoryCategory.Chat->Glyph.Chat;HistoryCategory.Compare->Glyph.Compare
                     HistoryCategory.Collaborate->Glyph.Collaborate;HistoryCategory.Debate->Glyph.Debate}
@@ -61,8 +62,8 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
                 Text(mode.title,style=MaterialTheme.typography.titleMedium,color=if(enabled) colors.onSurface else colors.onSurfaceVariant)
                 Text(subtitle,style=MaterialTheme.typography.bodySmall,color=colors.onSurfaceVariant)
             }
-            if(forward && mode.available) MeldwiseIcon(Glyph.Forward)
-            else if(selected) MeldwiseIcon(Glyph.Check)
+            if(forward && mode.available) MeldwiseIcon(Glyph.Forward,opticalSize=18.dp)
+            else if(selected) MeldwiseIcon(Glyph.Check,opticalSize=18.dp)
         }
     }
 }
@@ -87,7 +88,7 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f).meldwiseClickable(enabled=!busy,onClick=onOpen).padding(vertical=Space.medium)) {
             Text(title,style=MaterialTheme.typography.bodyMedium,maxLines=2,overflow=TextOverflow.Ellipsis)
-            Text(subtitle,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+            Text(subtitle,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
         }
         Box {
             SoftAction(Glyph.More,"记录操作",{menu=true},enabled=!busy,tonal=false)
@@ -100,9 +101,10 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
     }
 }
 @OptIn(ExperimentalAnimationApi::class)
-@Composable internal fun CatalogBanner(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit,modifier:Modifier=Modifier) {
-    AnimatedContent(targetState=notice,modifier=modifier.widthIn(max=Sizes.noticeMax),label="catalogNotice",
-        transitionSpec={(slideInHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {width ->-width/8}+fadeIn(tween(Motion.fadeInMs))) togetherWith fadeOut(tween(Motion.fadeOutMs))}) {current ->
+@Composable internal fun CatalogBanner(notice:CatalogNotice?,onDismiss:(Long)->Unit,onDetails:(CatalogNotice)->Unit,modifier:Modifier=Modifier,
+    availableWidth:Dp=MeldwiseContentMetrics.readableMax) {
+    AnimatedContent(targetState=notice,modifier=modifier.widthIn(max=MeldwiseContentMetrics.noticeWidth(availableWidth)),label="catalogNotice",
+        transitionSpec={fadeIn(tween(Motion.fadeInMs)) togetherWith fadeOut(tween(Motion.fadeOutMs))}) {current ->
         if(current!=null) {
             val tones=noticeColors(current.kind)
             Surface(shape=Radius.surface,color=tones.first,border=BorderStroke(Sizes.noticeBorder,tones.second),
@@ -128,11 +130,15 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
     visible.targetState=notice!=null
     if(!visible.currentState && !visible.targetState && visible.isIdle) return
     val density=LocalDensity.current
+    // Measure in the owning app/sheet window, not in a wrap-content popup window.
+    val availableWidth=with(density) {androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width.toDp()}
+    if(availableWidth<=0.dp) return
     val margin=with(density) {Space.content.roundToPx()}
     val top=WindowInsets.safeDrawing.getTop(density)+margin
-    val position=remember(margin,top) {object:PopupPositionProvider {
+    val position=remember(margin,top,density) {object:PopupPositionProvider {
         override fun calculatePosition(anchorBounds:IntRect,windowSize:IntSize,layoutDirection:LayoutDirection,popupContentSize:IntSize):IntOffset =
-            IntOffset(margin.coerceAtMost((windowSize.width-popupContentSize.width).coerceAtLeast(0)),
+            IntOffset(with(density) {MeldwiseContentMetrics.leadingInset(windowSize.width.toDp()).roundToPx()}
+                .coerceAtMost((windowSize.width-popupContentSize.width).coerceAtLeast(0)),
                 top.coerceAtMost((windowSize.height-popupContentSize.height).coerceAtLeast(0)))
     }}
     Popup(popupPositionProvider=position,
@@ -140,7 +146,7 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
         AnimatedVisibility(visibleState=visible,
             enter=slideInHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {-margin*2}+fadeIn(tween(Motion.fadeInMs)),
             exit=slideOutHorizontally(tween(Motion.switchMs,easing=Motion.easing)) {-margin}+fadeOut(tween(Motion.fadeOutMs))) {
-            CatalogBanner(retained,onDismiss,onDetails,Modifier.padding(end=Space.content))
+            CatalogBanner(retained,onDismiss,onDetails,Modifier.padding(end=Space.content),availableWidth)
         }
     }
 }
