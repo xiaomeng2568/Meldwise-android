@@ -39,7 +39,9 @@ class ChatActions(val chooseProvider: (String)->Unit, val selectModel: (ModelRef
     val deleteHistory:(String,Boolean)->Unit={_,_->},val moveHistory:(String,Boolean,Int)->Unit={_,_,_->},
     val dismissNotice:(Long)->Unit={},val newCollaborate:()->Unit={},
     val configureCollaborate:(CollaborateSubmission)->Unit={},val retryCollaborate:(String)->Unit={},
-    val refreshModels:(String)->Unit={})
+    val refreshModels:(String)->Unit={},val newDebate:()->Unit={},
+    val chooseDebateModel:(DebateRole,ModelRef)->Unit={_,_->},val debateThinking:(DebateRole,ReasoningPreference)->Unit={_,_->},
+    val retryDebate:(String)->Unit={})
 class CompareSubmission(val prompt:String,val a:ModelRef,val b:ModelRef,val pa:ReasoningPreference,val pb:ReasoningPreference) {
     override fun toString()="CompareSubmission([REDACTED])"
 }
@@ -70,6 +72,9 @@ private typealias Panel = ChatPanel
     var input by remember {mutableStateOf("")}
     val compareMode=navigation.compareMode
     val collaborateMode=!compareMode && foundation.mode==ConversationMode.Collaborate
+    val debateMode=!compareMode && foundation.mode==ConversationMode.Debate
+    val disclosureOwner=if(compareMode) foundation.run?.id else foundation.conversation?.conversationId
+    val answerDisclosures=remember(compareMode,foundation.mode,disclosureOwner) {AnswerDisclosures()}
     var pickingLane by remember {mutableStateOf<String?>(null)}
     // Retain only the local page while the native sheet closes, including programmatic dismissal.
     LaunchedEffect(navigation.stack,pickingLane) {
@@ -98,6 +103,7 @@ private typealias Panel = ChatPanel
     val transcript=if(compareMode) compareList else list
     val compareItems=remember(foundation.run,foundation.catalogs) {foundation.run?.let {compareMessageItems(it,foundation.catalogs)} ?: emptyList()}
     val collaborateItems=remember(foundation.conversation) {foundation.conversation?.takeIf {it.mode==ConversationMode.Collaborate}?.let(::collaborateMessageItems) ?: emptyList()}
+    val debateItems=remember(foundation.conversation) {foundation.conversation?.takeIf {it.mode==ConversationMode.Debate}?.let(::debateMessageItems) ?: emptyList()}
     val keyboardVisible=WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)>0
     BackHandler(enabled=panel==Panel.None && navigation.handlesBack && !keyboardVisible) {navigation=navigation.back()}
     LaunchedEffect(foundation.run?.id) {
@@ -105,6 +111,7 @@ private typealias Panel = ChatPanel
             effortA=run.outputs.firstOrNull()?.preference ?: ReasoningPreference.Auto;effortB=run.outputs.getOrNull(1)?.preference ?: ReasoningPreference.Auto}
     }
     LaunchedEffect(foundation.mode,foundation.conversation?.conversationId,foundation.collaborate) {
+        if(foundation.mode==ConversationMode.Debate) navigation=navigation.copy(compareMode=false)
         if(foundation.mode==ConversationMode.Collaborate) {
             navigation=navigation.copy(compareMode=false)
             foundation.collaborate?.let {config ->modelA=config.primary.ref;modelB=config.reviewer.ref;effortA=config.primary.preference;effortB=config.reviewer.preference
@@ -122,9 +129,10 @@ private typealias Panel = ChatPanel
         }
     }
     // Follow the bottom until the reader scrolls away. Provider messages remain untouched.
-    val visibleCount=if(compareMode) compareItems.size else if(collaborateMode) collaborateItems.size else screen.messages.size
+    val visibleCount=if(compareMode) compareItems.size else if(collaborateMode) collaborateItems.size else if(debateMode) debateItems.size else screen.messages.size
     val lastVisibleLength=if(compareMode) foundation.run?.outputs?.sumOf {it.output.length+it.reasoning.text.length}
         else if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.sumOf {it.output.length+it.reasoning.text.length}
+        else if(debateMode) foundation.conversation?.debateRounds?.lastOrNull()?.stages?.sumOf {it.output.length+it.reasoning.text.length}
         else screen.messages.lastOrNull()?.let {it.text.length+it.reasoning.text.length}
     LaunchedEffect(transcript,visibleCount,screen.historyRef,foundation.conversation?.conversationId,foundation.run?.id) {
         followLatest=true
@@ -140,14 +148,16 @@ private typealias Panel = ChatPanel
             }
         }
     }
+    CompositionLocalProvider(LocalAnswerDisclosures provides answerDisclosures) {
     Box(Modifier.fillMaxSize()) {
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().padding(horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
                 SoftAction(Glyph.Menu,"打开菜单",{navigation=navigation.open(Panel.Settings)},tonal=false)
-                ModelTitle(if(compareMode) "对比" else if(collaborateMode) "协作" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),
-                    if(compareMode || collaborateMode) listOfNotNull(modelA,modelB).joinToString(if(collaborateMode) " → " else " × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
-                    Modifier.weight(1f),onClick={pickingLane=null;navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Models)})
+                ModelTitle(if(compareMode) "对比" else if(collaborateMode) "协作" else if(debateMode) "辩论" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),
+                    if(debateMode) listOfNotNull(foundation.debate.selection.a,foundation.debate.selection.b,foundation.debate.selection.judge).joinToString(" / ") {it.displayName ?: it.ref.modelId}.ifEmpty {"选择 A、B 与 Judge"}
+                    else if(compareMode || collaborateMode) listOfNotNull(modelA,modelB).joinToString(if(collaborateMode) " → " else " × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
+                    Modifier.weight(1f),onClick={pickingLane=null;navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else if(debateMode) Panel.DebateSetup else Panel.Models)})
                 SoftAction(Glyph.Plus,"选择对话模式",{navigation=navigation.open(Panel.Modes)},enabled=!screen.busy,tonal=false)
             }
             if(compareMode) {
@@ -171,6 +181,18 @@ private typealias Panel = ChatPanel
                         item {MeldwiseTextButton(enabled=!screen.busy,onClick={actions.retryCollaborate(round.roundId)}) {Text("按原模型重新执行这一轮")}}
                     }
                 }
+            } else if(debateMode) {
+                LazyColumn(Modifier.weight(1f).widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().testTag("debateMessageFlow"),state=list,
+                    contentPadding=PaddingValues(horizontal=MeldwiseContentMetrics.conversationInset,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(MeldwiseContentMetrics.stageGap)) {
+                    if(debateItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large),verticalArrangement=Arrangement.spacedBy(Space.small)) {
+                        Text(DEBATE_EXPLANATION,style=MaterialTheme.typography.bodyMedium)
+                        MeldwiseTextButton(enabled=!screen.busy,onClick={navigation=navigation.open(Panel.DebateSetup)}) {Text("选择辩论模型")}
+                    }}
+                    items(debateItems,key={it.key}) {DebateMessage(it)}
+                    foundation.conversation?.let {c->c.debateRounds.lastOrNull()?.takeIf {debateRetryEligible(c,it)}?.let {round ->
+                        item(key="retry-${round.roundId}") {MeldwiseTextButton(enabled=!screen.busy,onClick={actions.retryDebate(round.roundId)}) {Text("按原模型重新执行这一轮")}}
+                    }}
+                }
             } else if(screen.messages.isEmpty()) {
                 Column(Modifier.weight(1f).fillMaxWidth().padding(Space.wide),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
                     MeldwiseMark(Modifier.padding(bottom=Space.wide))
@@ -186,7 +208,8 @@ private typealias Panel = ChatPanel
                 }
             }
             val background=MaterialTheme.colorScheme.background
-            val displayedErrors=if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.mapNotNull {it.error?.name}?.toSet() ?: emptySet() else emptySet()
+            val displayedErrors=if(collaborateMode) foundation.conversation?.rounds?.lastOrNull()?.stages?.mapNotNull {it.error?.name}?.toSet() ?: emptySet()
+                else if(debateMode) foundation.conversation?.debateRounds?.lastOrNull()?.stages?.mapNotNull {it.error?.name}?.toSet() ?: emptySet() else emptySet()
             Column(Modifier.widthIn(max=MeldwiseContentMetrics.readableMax).fillMaxWidth().drawBehind {
                 val height=MeldwiseContentMetrics.composerFade.toPx()
                 drawRect(Brush.verticalGradient(listOf(background.copy(alpha=0f),background),startY=-height,endY=0f),
@@ -198,21 +221,21 @@ private typealias Panel = ChatPanel
                             MeldwiseTextButton(onClick={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)}) {Text("详情")}
                         }
                 }
-                if(!compareMode && !collaborateMode && !ready && !screen.busy) MeldwiseTextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
+                if(!compareMode && !collaborateMode && !debateMode && !ready && !screen.busy) MeldwiseTextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
                     Text(if(chatgpt) "连接 ChatGPT 后开始聊天" else "配置 DeepSeek 密钥后开始聊天")
                 }
-                val summary=composerSummary(if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else HistoryCategory.Chat,
+                val summary=composerSummary(if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else if(debateMode) HistoryCategory.Debate else HistoryCategory.Chat,
                     if(screen.selected==null) "选择模型" else name,if(chatgpt) "默认" else preferenceLabel(foundation.thinking),reviewIntensityLabel(reviewIntensity))
                 AdaptiveComposer(input,{if(it.length<=32768) input=it},screen.busy,
-                    input.isNotBlank() && if(compareMode || collaborateMode) available(modelA) && available(modelB) && modelA!=modelB &&
+                    input.isNotBlank() && if(debateMode) foundation.debate.sendReady && foundation.conversation?.debateRounds?.none {it.lifecycle.active}!=false else if(compareMode || collaborateMode) available(modelA) && available(modelB) && modelA!=modelB &&
                         (!collaborateMode || foundation.collaborate?.primary?.ref==modelA && foundation.collaborate?.reviewer?.ref==modelB) else ready && screen.selected!=null,
                     onSend={if(compareMode) {val a=modelA;val b=modelB;if(a!=null && b!=null) actions.compare(CompareSubmission(input,a,b,effortA,effortB));input=""} else actions.send(input)},
-                    onStop=actions.cancel,onThinking={navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Thinking)},
-                    compareMode=compareMode,option=composerOption(compareMode || collaborateMode,foundation.thinking!=ReasoningPreference.Off && chatgpt.not()),
+                    onStop=actions.cancel,onThinking={navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else if(debateMode) Panel.DebateSetup else Panel.Thinking)},
+                    compareMode=compareMode,option=composerOption(compareMode || collaborateMode || debateMode,foundation.thinking!=ReasoningPreference.Off && chatgpt.not()),
                     options=navigation.composerOptions,onOptions={navigation=navigation.copy(composerOptions=it)},
-                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else "发送消息",
+                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else if(debateMode) "开始辩论" else "发送消息",
                     imeVisible=keyboardVisible,summary=summary,onConfiguration={pickingLane=null;navigation=navigation.open(summary.configuration)})
-                Text(if(compareMode || collaborateMode) "按各自服务计费 · 记录留在本机" else if(chatgpt) "ChatGPT 套餐" else "DeepSeek API 计费",
+                Text(if(compareMode || collaborateMode || debateMode) "按各自服务计费 · 记录留在本机" else if(chatgpt) "ChatGPT 套餐" else "DeepSeek API 计费",
                     style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier=Modifier.align(Alignment.CenterHorizontally).padding(bottom=Space.small))
             }
@@ -232,18 +255,22 @@ private typealias Panel = ChatPanel
             when(activePanel) {
                 Panel.Models -> {
                     val lane=frame.modelLane
+                    val debateRole=if(frame.debatePicker) DebateRole.entries.firstOrNull {it.name==lane} else null
                     ModelPicker(screen,ready,actions,onSettings={navigation=navigation.open(Panel.Providers)},onSelected={},
                     catalogs=foundation.catalogs,loading=foundation.catalogStatus.loading,
                     scope=if(lane==null) PickerScope.Single else PickerScope.Lane,
                     readyForProvider={id ->if(id==ProviderIds.CHATGPT) auth is AuthState.Connected && auth.planEnabled else apiState==ApiKeyState.CONFIGURED},
-                    selection=if(lane=="A") modelA else if(lane=="B") modelB else screen.selected,
-                    preference=if(lane=="A") effortA else if(lane=="B") effortB else foundation.thinking,
-                    onThinking={p ->if(lane=="A") {effortA=p;applyCollaborate(pa=p)} else if(lane=="B") {effortB=p;applyCollaborate(pb=p)} else actions.thinking(p)},onPick={ref ->
-                        if(lane=="A") {modelA=ref;effortA=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto;applyCollaborate(a=ref,pa=effortA)}
+                    selection=if(debateRole!=null) foundation.debate.selection.model(debateRole)?.ref else if(lane=="A") modelA else if(lane=="B") modelB else screen.selected,
+                    preference=if(debateRole!=null) foundation.debate.selection.model(debateRole)?.preference ?: ReasoningPreference.Auto else if(lane=="A") effortA else if(lane=="B") effortB else foundation.thinking,
+                    onThinking={p ->if(debateRole!=null) actions.debateThinking(debateRole,p) else if(lane=="A") {effortA=p;applyCollaborate(pa=p)} else if(lane=="B") {effortB=p;applyCollaborate(pb=p)} else actions.thinking(p)},onPick={ref ->
+                        if(debateRole!=null) actions.chooseDebateModel(debateRole,ref)
+                        else if(lane=="A") {modelA=ref;effortA=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto;applyCollaborate(a=ref,pa=effortA)}
                         else if(lane=="B") {modelB=ref;effortB=if(ref.providerId==ProviderIds.DEEPSEEK) ReasoningPreference.Off else ReasoningPreference.Auto;applyCollaborate(b=ref,pb=effortB)}
                         else actions.selectModel(ref)
                     })
                 }
+                Panel.DebateSetup -> DebateSetup(foundation.debate,screen.busy,
+                    onPick={role->pickingLane=role.name;navigation=navigation.open(Panel.Models)},onThinking=actions.debateThinking)
                 Panel.CompareSetup,Panel.CollaborateSetup -> PanelColumn(if(activePanel==Panel.CollaborateSetup) "协作" else "对比") {
                     listOf("A" to modelA,"B" to modelB).forEach {(id,ref) ->
                             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
@@ -274,7 +301,7 @@ private typealias Panel = ChatPanel
                     }
                 }
                 Panel.Thinking -> PanelColumn("思考") {ThinkingChoices(current,foundation.thinking,enabled=!screen.busy,actions.thinking)}
-                Panel.History,Panel.HistoryChat,Panel.HistoryCompare,Panel.HistoryCollaborate -> HistoryPanel(frame.historyCategory,
+                Panel.History,Panel.HistoryChat,Panel.HistoryCompare,Panel.HistoryCollaborate,Panel.HistoryDebate -> HistoryPanel(frame.historyCategory,
                     foundation.sessions,foundation.runs,screen.busy,
                     onCategory={navigation=navigation.openHistory(it)},
                     onOpen={entry ->
@@ -298,7 +325,7 @@ private typealias Panel = ChatPanel
                 }
                 Panel.Gallery -> ComponentGallery()
                 Panel.Settings -> PanelColumn("设置") {
-                    SettingsRow("历史","对话、对比与协作",{navigation=navigation.open(Panel.History)})
+                    SettingsRow("历史","对话、对比、协作与辩论",{navigation=navigation.open(Panel.History)})
                     SettingsRow("提供方与账号","ChatGPT 套餐 / DeepSeek API",{navigation=navigation.open(Panel.Providers)})
                     SettingsRow("外观","主题与重点色",{navigation=navigation.open(Panel.Appearance)})
                     HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant,modifier=Modifier.padding(vertical=Space.small))
@@ -308,10 +335,11 @@ private typealias Panel = ChatPanel
                     if(chatgpt) MeldwiseTextButton(enabled=!screen.busy,onClick={actions.showLegacy();navigation=navigation.dismiss()}) {Text("查看旧版 ChatGPT 记录")}
                     Text("Meldwise · ${androidx.compose.ui.res.stringResource(io.github.xiaomeng2568.meldwise.R.string.public_alpha_version)}\n非官方客户端 · SIWC 兼容性：有条件通过",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Panel.Modes -> ModePicker(enabled=!screen.busy,selected=if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else HistoryCategory.Chat,
+                Panel.Modes -> ModePicker(enabled=!screen.busy,selected=if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else if(debateMode) HistoryCategory.Debate else HistoryCategory.Chat,
                     onSingle={input="";actions.newChat();navigation=navigation.selectMode(false)},
                     onCompare={input="";actions.newCompare();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;navigation=navigation.selectMode(true)},
-                    onCollaborate={input="";actions.newCollaborate();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;reviewIntensity=ReviewIntensity.STANDARD;synthesisRole=SynthesisRole.PRIMARY;navigation=navigation.dismiss().copy(compareMode=false).open(Panel.CollaborateSetup)})
+                    onCollaborate={input="";actions.newCollaborate();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;reviewIntensity=ReviewIntensity.STANDARD;synthesisRole=SynthesisRole.PRIMARY;navigation=navigation.dismiss().copy(compareMode=false).open(Panel.CollaborateSetup)},
+                    onDebate={input="";actions.newDebate();navigation=navigation.dismiss().copy(compareMode=false).open(Panel.DebateSetup)})
                 Panel.None -> Unit
             }
             }
@@ -319,6 +347,7 @@ private typealias Panel = ChatPanel
             CatalogNoticeOverlay(catalogNotice,actions.dismissNotice,showCatalogDetails)
         }
     }
+}
 }
 
 @Composable internal fun PanelColumn(title: String, content: @Composable ColumnScope.()->Unit) {

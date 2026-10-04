@@ -37,33 +37,43 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
             laneState(message.state),message.text,reasoningPresentation(message.reasoning),seconds),onDetails=onDetails)
     }
 }
-/** Shared free-flowing answer for Single and Compare. No result-card shell. */
+/** Shared free-flowing answer. Optional disclosure is presentation-only; no result-card shell. */
 @Composable fun AssistantOutput(lane:CompareLane,modifier:Modifier=Modifier,onDetails:(()->Unit)?=null,
-    role:AnswerRole=AnswerRole.Single,heading:String?=null) {
+    role:AnswerRole=AnswerRole.Single,heading:String?=null,
+    statusLabel:String?=assistantStatus(lane.state,lane.seconds),accessibleState:String=laneLabel(lane.state),
+    disclosureKey:String?=null) {
     var plain by remember {mutableStateOf(false)}
-    val status=assistantStatus(lane.state,lane.seconds)
-    Column(modifier.fillMaxWidth().testTag("assistantOutput").semantics {stateDescription=laneLabel(lane.state)},
+    val disclosures=LocalAnswerDisclosures.current ?: remember {AnswerDisclosures()}
+    val canCollapse=heading!=null && answerDisclosureAvailable(role,lane.answer,disclosureKey)
+    val expanded=disclosureKey?.let(disclosures::expanded) ?: true
+    Column(modifier.fillMaxWidth().testTag("assistantOutput").semantics {stateDescription=accessibleState},
         verticalArrangement=Arrangement.spacedBy(MeldwiseContentMetrics.bodyGap)) {
         heading?.let {
             if(role.primaryHeading()) HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant,modifier=Modifier.padding(bottom=Space.small))
-            Text(it,style=if(role.primaryHeading()) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelMedium,
-                color=if(role.primaryHeading()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.small)) {
+                Text(it,Modifier.weight(1f),style=if(role.primaryHeading()) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelMedium,
+                    color=if(role.primaryHeading()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                if(canCollapse) AnswerDisclosureButton(disclosureKey!!,it,expanded) {disclosures.toggle(disclosureKey)}
+            }
         }
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.small)) {
             Column(Modifier.weight(1f)) {
                 Text(modelLabel(lane.ref,lane.displayName),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines=2,overflow=TextOverflow.Ellipsis)
-                status?.let {Text(it,style=MaterialTheme.typography.labelMedium,
+                statusLabel?.let {Text(it,style=MaterialTheme.typography.labelMedium,
                     color=if(lane.state==LaneState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)}
             }
         }
-        when(answerContentMode(plain)) {
-            AnswerContentMode.Source -> LiteralSurface(lane.answer,"纯文本 · Plain text",showCopy=false)
-            AnswerContentMode.Formatted -> ContentRenderer(remember(lane.answer) {ContentParser.parse(lane.answer)})
+        val answerContent:@Composable ()->Unit = {
+            when(answerContentMode(plain)) {
+                AnswerContentMode.Source -> LiteralSurface(lane.answer,"纯文本 · Plain text",showCopy=false)
+                AnswerContentMode.Formatted -> ContentRenderer(remember(lane.answer) {ContentParser.parse(lane.answer)})
+            }
+            ReasoningPanel(lane.reasoning)
+            val details=onDetails?.takeIf {lane.state in setOf(LaneState.Failed,LaneState.Incomplete,LaneState.Interrupted)}
+            if(lane.answer.isNotEmpty() || details!=null) MessageActions(lane.answer,plain,{plain=!plain},details)
         }
-        ReasoningPanel(lane.reasoning)
-        val details=onDetails?.takeIf {lane.state in setOf(LaneState.Failed,LaneState.Incomplete,LaneState.Interrupted)}
-        if(lane.answer.isNotEmpty() || details!=null) MessageActions(lane.answer,plain,{plain=!plain},details)
+        if(canCollapse) AnswerDisclosureBody(disclosureKey!!,expanded,answerContent) else answerContent()
     }
 }
 @Composable private fun MessageActions(text:String,plain:Boolean,onToggleSource:()->Unit,onDetails:(()->Unit)?) {
@@ -88,7 +98,8 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
         is CompareMessageItem.Prompt->UserPrompt(item.item.content)
         is CompareMessageItem.Output->{
             HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant,modifier=Modifier.padding(bottom=Space.medium))
-            AssistantOutput(item.presentation,role=AnswerRole.Independent,heading="模型 ${item.record.laneId} · 独立回答")
+            AssistantOutput(item.presentation,role=AnswerRole.Independent,heading="模型 ${item.record.laneId} · 独立回答",
+                disclosureKey="compare/${item.key}")
         }
     }
 }

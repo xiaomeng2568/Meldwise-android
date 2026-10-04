@@ -161,7 +161,7 @@ class CollaborateTests {
         }
         blob.write(box.seal(stripped.toString().toByteArray()))
         val restored=ChatRepository(blob,box);assertEquals(2,restored.load().size)
-        assertEquals(3,restored.activeConversation()!!.schemaVersion);assertEquals(ConversationMode.Single,restored.mode())
+        assertEquals(4,restored.activeConversation()!!.schemaVersion);assertEquals(ConversationMode.Single,restored.mode())
     }
     @Test fun cancellationDuringAtomicAdmissionProducesCancelledRoundAndZeroRequests()=runBlocking {
         val memory=MemoryBlob();val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)

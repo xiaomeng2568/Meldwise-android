@@ -34,20 +34,20 @@ class HistoryVisualUiTest {
     private val a=ModelRef("chatgpt","a");private val b=ModelRef("deepseek","b")
     private val sessions=listOf(SingleSessionInfo("s",a,"Synthetic chat"),SingleSessionInfo("co",b,"Synthetic collaboration",ConversationMode.Collaborate))
     private val runs=listOf(CompareRun("cmp","Synthetic comparison",CompareLaneRecord("A",a),CompareLaneRecord("B",b)))
-    @Test fun chooserHasFourDistinctIconRowsAndDisabledDebate() {
+    @Test fun chooserHasFourDistinctEnabledIconRows() {
         compose.setContent {MeldwiseTheme {ModePicker(true,{},{},{})}}
         HistoryCategory.entries.forEach {compose.onNodeWithTag("modeRow-${it.name}").assertExists();compose.onNodeWithTag("modeIcon-${it.name}",useUnmergedTree=true).assertExists()}
-        compose.onNodeWithTag("modeRow-Debate").assertIsNotEnabled();compose.onNodeWithText("暂未开放").assertExists()
+        compose.onNodeWithTag("modeRow-Debate").assertIsEnabled();compose.onNodeWithText("暂未开放").assertDoesNotExist()
     }
     @Test fun activeModeHasSelectedSemantics() {compose.setContent {MeldwiseTheme {ModePicker(true,{},{},{},HistoryCategory.Collaborate)}}
         compose.onNodeWithTag("modeRow-Collaborate").assertIsSelected();compose.onNodeWithTag("modeRow-Compare").assertIsNotSelected()}
     @Test fun historyRootShowsCountsAndNoPrivateTitles() {
         compose.setContent {MeldwiseTheme {HistoryPanel(null,sessions,runs,false,{},{},{},{_,_->})}}
-        compose.onAllNodesWithText("1 条记录").assertCountEquals(3);compose.onNodeWithText("暂未开放").assertExists()
-        compose.onNodeWithText("Synthetic chat").assertDoesNotExist();compose.onNodeWithTag("modeRow-Debate").assertIsNotEnabled()
+        compose.onAllNodesWithText("1 条记录").assertCountEquals(3);compose.onNodeWithText("0 条记录").assertExists()
+        compose.onNodeWithText("Synthetic chat").assertDoesNotExist();compose.onNodeWithTag("modeRow-Debate").assertIsEnabled()
     }
-    @Test fun emptyCategoriesShowZeroInsteadOfFakeDebateCount() {compose.setContent {MeldwiseTheme {HistoryPanel(null,emptyList(),emptyList(),false,{},{},{},{_,_->})}}
-        compose.onAllNodesWithText("0 条记录").assertCountEquals(3);compose.onNodeWithText("暂未开放").assertExists()}
+    @Test fun emptyCategoriesShowFourRealZeroCounts() {compose.setContent {MeldwiseTheme {HistoryPanel(null,emptyList(),emptyList(),false,{},{},{},{_,_->})}}
+        compose.onAllNodesWithText("0 条记录").assertCountEquals(4);compose.onNodeWithText("暂未开放").assertDoesNotExist()}
     @Test fun chatCategoryShowsOnlyChatAndOpensCorrectId() {var opened:HistoryEntry?=null
         compose.setContent {MeldwiseTheme {HistoryPanel(HistoryCategory.Chat,sessions,runs,false,{},{opened=it},{},{_,_->})}}
         compose.onNodeWithText("Synthetic chat").performClick();compose.onNodeWithText("Synthetic collaboration").assertDoesNotExist()
@@ -71,7 +71,7 @@ class HistoryVisualUiTest {
         compose.setContent {val density=LocalDensity.current;CompositionLocalProvider(LocalDensity provides Density(density.density,2f)) {
             MeldwiseTheme(Appearance.Dark,0x366BD5L) {Box(Modifier.width(320.dp)) {ModePicker(true,{},{},{})}}
         }}
-        compose.onNodeWithTag("modeRow-Debate").performScrollTo().assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithTag("modeRow-Debate").performScrollTo().assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithTag("modeRow-Chat").performScrollTo().assertHeightIsAtLeast(48.dp)
     }
     @Test fun launcherResourcesResolveAsAdaptiveDrawables() {compose.runOnIdle {

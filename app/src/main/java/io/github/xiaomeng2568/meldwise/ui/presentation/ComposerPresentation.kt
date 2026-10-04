@@ -16,6 +16,6 @@ internal fun composerSummary(category: HistoryCategory, modelName: String, think
         HistoryCategory.Chat -> ComposerSummary("$short · $thinkingLabel", ChatPanel.Models)
         HistoryCategory.Compare -> ComposerSummary("双模型回答", ChatPanel.CompareSetup)
         HistoryCategory.Collaborate -> ComposerSummary("协作 · $reviewLabel", ChatPanel.CollaborateSetup)
-        HistoryCategory.Debate -> ComposerSummary("暂未开放", ChatPanel.Modes)
+        HistoryCategory.Debate -> ComposerSummary("辩论 · 5 请求", ChatPanel.DebateSetup)
     }
 }

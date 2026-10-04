@@ -46,7 +46,8 @@ fun collaborateMessageItems(c:Conversation):List<CollaborateMessageItem> {
                 if(s.state!=CollaborateStageState.NotRun) {
                     AssistantOutput(CompareLane(s.model.ref,s.model.displayName ?: s.model.ref.modelId,collaborateLaneState(s),
                         s.output,reasoningPresentation(s.reasoning),s.processingDuration),heading=heading,
-                        role=when(s.type) {CollaborateStageType.INITIAL->AnswerRole.Initial;CollaborateStageType.REVIEW->AnswerRole.Review;CollaborateStageType.SYNTHESIS->AnswerRole.Synthesis})
+                        role=when(s.type) {CollaborateStageType.INITIAL->AnswerRole.Initial;CollaborateStageType.REVIEW->AnswerRole.Review;CollaborateStageType.SYNTHESIS->AnswerRole.Synthesis},
+                        disclosureKey=if(s.type!=CollaborateStageType.SYNTHESIS) "collaborate/${item.key}" else null)
                     s.error?.let {kind ->
                         Text(collaborateErrorLabel(kind),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
                         var details by remember {mutableStateOf(false)}

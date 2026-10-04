@@ -8,6 +8,7 @@ import io.github.xiaomeng2568.meldwise.data.*
 import io.github.xiaomeng2568.meldwise.provider.*
 import io.github.xiaomeng2568.meldwise.network.ModelCatalogDiagnostic
 import io.github.xiaomeng2568.meldwise.security.ApiKeyState
+import io.github.xiaomeng2568.meldwise.ui.presentation.DebateRole
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -49,17 +50,23 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     private var collaborateJob:Job?=null
     private var pendingTurn:PreparedTurn?=null
     private var pendingThinking=ReasoningPreference.Auto
-    private fun clearSharing() {pendingTurn=null;sharingRequest.value=null;pendingCollaborate=null;collaborateSharing.value=null}
+    private fun clearSharing() {pendingTurn=null;sharingRequest.value=null;pendingCollaborate=null;collaborateSharing.value=null;debateWorkflow.dismissSharing()}
     private var compareJob:Job?=null
-    private suspend fun refreshHistory()=withContext(Dispatchers.IO) {
+    private suspend fun refreshHistory(syncDebate:Boolean=true):Unit=withContext(Dispatchers.IO) {
         singleHistory.value=container.chat.sessions();compareHistory.value=container.compare.load().reversed()
         conversation.value=container.chat.activeConversation();conversationMode.value=container.chat.mode();collaborateConfig.value=container.chat.collaborateConfig()
+        if(syncDebate) debateWorkflow.restore(container.chat.debateConfig())
     }
     // Presentation-only timing observation; provider, refresh and terminal logic remain unchanged.
     val processingTime=io.github.xiaomeng2568.meldwise.ui.presentation.ProcessingObserver(screen,viewModelScope,container.network.diagnostics).state
     private var chatJob:Job?=null
     private var authJob:Job?=null
     private var loadJob:Job?=null
+    private val debateWorkflow:DebateWorkflow=DebateWorkflow(viewModelScope,container.chat,container.providers,{cache.value},
+        {screen.value.busy},{replace(busy=it,error=if(it) null else screen.value.error)},
+        {replace(error=it)},{c->conversation.value=c;replace(messages=c?.messages ?: emptyList())},
+        {refreshHistory(syncDebate=false)})
+    val debateState=debateWorkflow.state
     init { viewModelScope.launch {
         runCatching { withContext(Dispatchers.IO) { container.tokens.initialize() } }
         try {
@@ -78,6 +85,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     init {viewModelScope.launch {catalogLoader.state.collect {syncCatalog(it)}}}
     private fun syncCatalog(status:CatalogUiState) {
         cache.value=status.catalogs
+        debateWorkflow.refreshAvailability()
         val id=screen.value.providerId;val ref=screen.value.historyRef
         val models=status.catalogs[id] ?: emptyList()
         replace(models=models,selected=ref.takeIf {it.providerId==id && models.any {m->m.id==it.modelId}},
@@ -180,6 +188,7 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
     }
     fun send(text:String) {
         if(screen.value.busy || text.isBlank()) return
+        if(conversationMode.value==ConversationMode.Debate) {debateWorkflow.send(text);return}
         if(conversationMode.value==ConversationMode.Collaborate) {sendCollaborate(text);return}
         val model=screen.value.selected ?: return
         val preference=thinking.value
@@ -282,6 +291,14 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             replace(messages=withContext(Dispatchers.IO) {container.chat.newCollaborate()});compareRun.value=null;refreshHistory()
         } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
     }
+    fun newDebate() {
+        if(screen.value.busy) return
+        clearSharing();compareRun.value=null;debateWorkflow.newDebate()
+    }
+    fun chooseDebateModel(role:DebateRole,ref:ModelRef)=debateWorkflow.choose(role,ref)
+    fun setDebateThinking(role:DebateRole,value:ReasoningPreference)=debateWorkflow.thinking(role,value)
+    fun retryDebate(id:String)=debateWorkflow.retry(id)
+    fun continueDebateSharing()=debateWorkflow.continueSharing()
     fun configureCollaborate(selection:CollaborateSubmission) {
         if(screen.value.busy || conversationMode.value!=ConversationMode.Collaborate) return
         fun model(ref:ModelRef,p:ReasoningPreference):CollaborateModel? {
@@ -375,8 +392,8 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
     }
     fun clearCompareDraft() {if(!screen.value.busy) compareRun.value=null}
-    fun cancel() { collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel(); authJob?.cancel(); loadJob?.cancel() }
-    fun foregroundStopped() {clearSharing();collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel() } // Browser authorization intentionally survives the browser handoff.
+    fun cancel() { debateWorkflow.cancel();collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel(); authJob?.cancel(); loadJob?.cancel() }
+    fun foregroundStopped() {clearSharing();debateWorkflow.cancel();collaborateJob?.cancel();compareJob?.cancel();chatJob?.cancel() } // Browser authorization intentionally survives the browser handoff.
     fun disconnect() {
         if(screen.value.busy || screen.value.providerId!=ProviderIds.CHATGPT) return
         replace(busy=true)

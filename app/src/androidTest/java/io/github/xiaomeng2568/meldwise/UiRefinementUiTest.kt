@@ -67,19 +67,19 @@ class UiRefinementUiTest {
         compose.onNodeWithText("综合").assertExists();compose.onNodeWithText("Synthesis answer").assertExists()
         compose.onNodeWithTag("assistantOutput").assertExists()
     }
-    @Test fun historyStillHasThreeRealCountsAndUnavailableDebate() {
+    @Test fun historyHasFourRealCategories() {
         compose.setContent {MeldwiseTheme {HistoryPanel(null,listOf(SingleSessionInfo("s",ref,"Chat"),SingleSessionInfo("c",ref,"Collab",ConversationMode.Collaborate)),emptyList(),false,{},{},{},{_,_->})}}
         compose.onNodeWithText("对话").assertExists();compose.onNodeWithText("对比").assertExists();compose.onNodeWithText("协作").assertExists()
-        compose.onAllNodesWithText("1 条记录").assertCountEquals(2);compose.onNodeWithText("0 条记录").assertExists()
-        compose.onNodeWithTag("modeRow-Debate").assertIsNotEnabled();compose.onNodeWithText("暂未开放").assertExists()
+        compose.onAllNodesWithText("1 条记录").assertCountEquals(2);compose.onAllNodesWithText("0 条记录").assertCountEquals(2)
+        compose.onNodeWithTag("modeRow-Debate").assertIsEnabled();compose.onNodeWithText("暂未开放").assertDoesNotExist()
     }
-    @Test fun fourModeRowsRemainAccessibleAndDisabledDebateNeverFires() {
+    @Test fun fourModeRowsRemainAccessibleAndDebateFiresExplicitAction() {
         var calls=0
-        compose.setContent {MeldwiseTheme {ModePicker(true,{calls++},{calls++},{calls++},HistoryCategory.Chat)}}
+        compose.setContent {MeldwiseTheme {ModePicker(true,{calls++},{calls++},{calls++},HistoryCategory.Chat,onDebate={calls++})}}
         compose.onNodeWithTag("modeRow-Chat").assertIsSelected().assertHasClickAction()
         compose.onNodeWithTag("modeRow-Compare").assertHasClickAction();compose.onNodeWithTag("modeRow-Collaborate").assertHasClickAction()
-        compose.onNodeWithTag("modeRow-Debate").assertIsNotEnabled().performTouchInput {click()}
-        compose.runOnIdle {assertEquals(0,calls)}
+        compose.onNodeWithTag("modeRow-Debate").assertIsEnabled().performClick()
+        compose.runOnIdle {assertEquals(1,calls)}
     }
     @Test fun narrowLargeFontComposerRetainsSendAndInputOptions() {
         compose.setContent {MeldwiseTheme {CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density,2f)) {

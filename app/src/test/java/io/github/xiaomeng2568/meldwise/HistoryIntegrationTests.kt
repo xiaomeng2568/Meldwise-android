@@ -38,9 +38,9 @@ class HistoryIntegrationTests {
     @Test fun singleCountOnlyIncludesSingle() {assertEquals(2,count(fixture(),HistoryCategory.Chat))}
     @Test fun compareCountUsesSeparateStore() {assertEquals(2,count(fixture(),HistoryCategory.Compare))}
     @Test fun collaborateCountOnlyIncludesCollaborate() {assertEquals(2,count(fixture(),HistoryCategory.Collaborate))}
-    @Test fun debateIsUnavailableNotEmptyStore() {val f=fixture();assertTrue(entries(f,HistoryCategory.Debate).isEmpty());assertFalse(HistoryCategory.Debate.available)
-        assertEquals("暂未开放",historySummaries(f.chat.sessions(),f.compare.load()).last().label)}
-    @Test fun emptyRealCategoriesHaveConsistentZeroLabel() {assertEquals(listOf("0 条记录","0 条记录","0 条记录","暂未开放"),historySummaries(emptyList(),emptyList()).map {it.label})}
+    @Test fun debateIsAvailableWithoutInventingRecords() {val f=fixture();assertTrue(entries(f,HistoryCategory.Debate).isEmpty());assertTrue(HistoryCategory.Debate.available)
+        assertEquals("0 条记录",historySummaries(f.chat.sessions(),f.compare.load()).last().label)}
+    @Test fun emptyRealCategoriesHaveConsistentZeroLabel() {assertEquals(List(4) {"0 条记录"},historySummaries(emptyList(),emptyList()).map {it.label})}
     @Test fun categoryOrderMatchesModeChooser() {assertEquals(listOf(HistoryCategory.Chat,HistoryCategory.Compare,HistoryCategory.Collaborate,HistoryCategory.Debate),historySummaries(emptyList(),emptyList()).map {it.category})}
     @Test fun singleEntryOpensSingleMode() {val f=fixture();val e=entries(f,HistoryCategory.Chat).first();f.chat.activateSession(e.id)
         assertEquals(ConversationMode.Single,f.chat.mode());assertFalse(ChatNavigation(compareMode=true).openHistoryEntry(e).compareMode)}
@@ -53,8 +53,8 @@ class HistoryIntegrationTests {
     @Test fun collaborateCategoryBackReturnsToHistoryRoot() {assertEquals(ChatPanel.History,ChatNavigation().open(ChatPanel.History).openHistory(HistoryCategory.Collaborate).back().panel)}
     @Test fun historyRootBackRestoresPreviousScreen() {val n=ChatNavigation(compareMode=true).open(ChatPanel.Settings).open(ChatPanel.History).openHistory(HistoryCategory.Chat)
         assertEquals(ChatPanel.Settings,n.back().back().panel);assertEquals(ChatPanel.None,n.back().back().back().panel);assertTrue(n.back().back().back().compareMode)}
-    @Test fun debateCannotOpenCategoryOrEntry() {val n=ChatNavigation().open(ChatPanel.History);assertEquals(n,n.openHistory(HistoryCategory.Debate))
-        assertThrows(IllegalArgumentException::class.java) {n.openHistoryEntry(HistoryEntry("none",HistoryCategory.Debate,"",""))}}
+    @Test fun debateOpensCategoryAndRestoresConversationMode() {val n=ChatNavigation().open(ChatPanel.History);assertEquals(ChatPanel.HistoryDebate,n.openHistory(HistoryCategory.Debate).panel)
+        assertFalse(n.openHistoryEntry(HistoryEntry("existing",HistoryCategory.Debate,"","")).compareMode);assertEquals(ConversationMode.Debate,HistoryCategory.Debate.conversationMode)}
     @Test fun openCategoryAddsHistoryParentWhenNeeded() {val n=ChatNavigation().openHistory(HistoryCategory.Compare);assertEquals(HistoryCategory.Compare,n.historyCategory);assertEquals(ChatPanel.History,n.back().panel)}
     @Test fun openingCategoryTwiceDoesNotDuplicatePanel() {val n=ChatNavigation().openHistory(HistoryCategory.Chat);assertEquals(n,n.openHistory(HistoryCategory.Chat))}
     @Test fun switchingCategoriesStillReturnsToHistoryRoot() {val n=ChatNavigation().open(ChatPanel.Settings).openHistory(HistoryCategory.Chat).openHistory(HistoryCategory.Collaborate)

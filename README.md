@@ -1,24 +1,27 @@
 # Meldwise
 
-Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型一直聊下去，把同一个问题交给两个模型分别回答，也可以让两个模型接力审阅、整理成一份答案。
+Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型一直聊下去，把同一个问题交给两个模型分别回答，让两个模型接力审阅，也可以让它们互相检查，再由 Judge 整理最终答案。
 
-当前版本：**0.2.0 Alpha 3**（[`v0.2.0-alpha.3`](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.3)）。这一版把阅读、输入和代码展示打磨得更顺手，欢迎下载试用，也欢迎分享使用感受。
+当前版本：**0.2.0 Alpha 4**（[`v0.2.0-alpha.4`](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.4)）。这一版开放了辩论模式，也为多模型回答增加了收起和展开，方便专注阅读。欢迎下载试用，也欢迎分享使用感受。
 
-## 三种聊法
+## 四种聊法
 
 - **对话**：和一个模型持续聊天。同一条历史里可以接着问，关闭应用后也能打开继续。
 - **对比**：把同一个问题交给两个模型，各自回答，方便你看看两边的想法。
 - **协作**：主模型先回答，审阅模型检查和补充，再由你选定的模型整理出最终答案。后续问题仍接在同一条历史里。
+- **辩论**：A 和 B 先独立回答，再互相审阅，最后由 Judge 整理结果。两份初答、两份审阅分别并行进行；Judge 等两份审阅完成后再开始。
 
 协作的审阅强度有简洁、标准、严格三档，最终综合可交给主模型或审阅模型，对应 A → B → A 或 A → B → B。审阅强度控制的是 Meldwise 的协作提示，与服务商的模型思考强度分别设置。旧协作记录继续采用标准审阅、主模型综合。
+
+辩论需要选择不同的 A、B 模型，Judge 可以与 A 或 B 相同，也可以是另一个已配置的模型。三个角色各自使用所选模型支持的思考设置。完整一轮最多发起 **5 次模型请求**，费用和额度按各自服务计算；辩论并不保证答案一定更好。
 
 ## 日常使用
 
 连接 ChatGPT 账号后，可以使用账号当前可用的套餐模型；配置 DeepSeek API Key 后，可以加载官方模型列表，调整思考强度，查看服务商返回的可见思考内容。
 
-回答会实时显示。需要停下来时，可以取消并保留已收到的内容；协作中已经完成的阶段也会留下。每条回答都保留生成时的模型标识，方便回看。
+回答会实时显示。需要停下来时，可以取消并保留已收到的内容；协作和辩论中已经完成的阶段也会留下。每条回答都保留生成时的模型标识，方便回看。
 
-历史按对话、对比、协作分类，支持打开、删除和调整顺序。外观可以选择浅色、深色、跟随系统，也可以挑一个自己喜欢的重点色。应用与模式图标采用 Meldwise 原创设计。
+历史按对话、对比、协作、辩论分类，支持打开、删除和调整顺序。辩论可以在同一条历史里继续追问，重新打开时不会自动续发请求。外观可以选择浅色、深色、跟随系统，也可以挑一个自己喜欢的重点色。应用与模式图标采用 Meldwise 原创设计。
 
 打开应用时会先使用本地模型列表；列表为空或超过 24 小时后，再后台更新。暂时更新失败时，已有列表仍然可用。
 
@@ -26,7 +29,9 @@ Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型�
 
 正文支持 Markdown、纯文本和常用数学公式。代码块有语言标签和复制按钮，长行可以横向查看，较长内容可以手动展开。代码块与行内代码使用 JetBrains Mono，配合轻量语法高亮，阅读代码更清楚；复制时保留原始内容。
 
-输入框在空闲时保持紧凑，开始输入或编辑多行文字时自然展开。对话、对比和协作共用更一致的阅读宽度和间距，模型信息、思考内容与操作按钮也更轻量。
+输入框在空闲时保持紧凑，开始输入或编辑多行文字时自然展开。四种模式共用更一致的阅读宽度和间距，模型信息、思考内容与操作按钮也更轻量。
+
+对比的两份回答、协作的初答和审阅、辩论的两份初答都可以独立收起或展开，带有轻量过渡动效。收起后仍保留模型和阶段状态，不会停止生成、删除内容或改变模型收到的上下文。协作综合和 Judge 最终答案保持直接展示。折叠选择只用于当前阅读页面，重新打开会恢复展开。
 
 公式通过 Orcex 原生渲染，支持常用 TeX 子集；遇到未闭合、解析失败或超出支持范围的表达式时，会保留原文。代码高亮采用保守词法识别，适合常见语法的阅读辅助，复杂或难以确定的结构保持普通代码样式。JetBrains Mono 的中文注释由系统字体补充显示。
 
@@ -34,7 +39,7 @@ Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型�
 
 凭据、模型目录和各模式历史通过 Android Keystore 和 AES-256-GCM 加密保存在设备上，系统备份会排除这些数据。
 
-多轮聊天会选取有界的近期可见消息和回答作为上下文。切换服务商继续对话，或让不同服务商协作时，应用会先询问你是否共享可见上下文和回答，许可只用于当前对话。共享范围仅包括可见消息和回答；服务商返回的可见思考内容单独展示。协作的后续轮次主要使用最终综合回答作为上下文，中间阶段保留在本地历史里供回看。
+多轮聊天会选取有界的近期可见消息和回答作为上下文。切换服务商继续对话，或让不同服务商参与协作、辩论时，应用会先询问你是否共享可见上下文和回答，许可只用于当前对话与确切的一组服务商。共享范围仅包括可见消息和回答；服务商返回的可见思考内容单独展示，不会作为普通上下文传给其他模型。协作后续轮次主要使用最终综合回答，辩论后续轮次使用用户消息与成功的 Judge 最终回答；中间阶段保留在本地历史里供回看。
 
 请求使用你选择的服务商和模型，发送、重试与更换模型由你操作。重新打开历史会恢复已有内容和状态，继续聊天时再发起新的请求。
 
@@ -48,7 +53,7 @@ ChatGPT 使用你的账号套餐权限；DeepSeek 使用你配置的 API Key，�
 
 Meldwise 还处于 Alpha 阶段，更多设备和长时间使用的验证仍在继续。SIWC 兼容性目前为 CONDITIONAL（有条件通过），完整真机 AndroidTest 覆盖也在继续完善。
 
-对比目前围绕单个问题展开；协作保持三阶段，重试按整轮进行。Debate、Judge、工具调用、图片输入与 OpenAI API Key 接入属于后续方向。旧版 UI 存储格式的降级恢复也仍待完善。
+对比目前围绕单个问题展开；协作保持三阶段，辩论保持五阶段。协作和辩论重试都按整轮、原模型快照进行，不支持单阶段续跑。辩论的 Judge 用于整理答案，不提供胜负评分或答案质量保证。工具调用、图片输入与 OpenAI API Key 接入属于后续方向。旧版 UI 存储格式的降级恢复也仍待完善。
 
 ChatGPT 的可用模型、额度和手动思考设置取决于你的套餐、登录路径及模型支持情况。界面展示服务商提供的用户可见内容：ChatGPT 的可见摘要、DeepSeek 的可见思考与最终回答分别呈现；隐藏的内部思维链属于服务商内部信息。
 
@@ -74,25 +79,28 @@ ChatGPT 的可用模型、额度和手动思考设置取决于你的套餐、登
 
 # English
 
-Meldwise is an Android multi-model chat client. Keep a conversation going with one model, compare two independent answers, or have two models review and refine an answer together.
+Meldwise is an Android multi-model chat client. Keep a conversation going with one model, compare two independent answers, have two models refine an answer together, or let them cross-review before a Judge puts together the final answer.
 
-The current release is **0.2.0 Alpha 3** ([`v0.2.0-alpha.3`](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.3)). This update makes reading, typing and working with code a little smoother. Give it a try and let us know how it feels.
+The current release is **0.2.0 Alpha 4** ([`v0.2.0-alpha.4`](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.2.0-alpha.4)). This update opens Debate mode and adds independent answer disclosure to make multi-model conversations easier to read. Give it a try and let us know how it feels.
 
-## Three ways to chat
+## Four ways to chat
 
 - **Chat**: keep talking in the same conversation, including after reopening the app.
 - **Compare**: ask two models the same question and read their answers independently.
 - **Collaborate**: let the Primary model answer first, the Reviewer check and supplement it, and your chosen model put together the final answer. Follow-up questions stay in the same conversation.
+- **Debate**: A and B answer independently, cross-review, and a Judge puts together the result. Each pair of initial answers and reviews runs in parallel; Judge starts only after both reviews finish.
 
 Choose Concise, Standard or Strict review, then use either the Primary or Reviewer for synthesis: A → B → A or A → B → B. Review Intensity controls Meldwise's collaboration instructions; provider thinking effort has its own setting. Existing records keep Standard review and Primary synthesis.
+
+Choose different A and B models for Debate. Judge may match either participant or be another configured model. Each role uses reasoning preferences supported by its selected model. A complete round can make up to **5 model requests**, with usage and billing following each provider. Debate does not guarantee a better answer.
 
 ## Everyday use
 
 Connect a ChatGPT account to use its available plan-backed models, or configure a DeepSeek API key to load the official model catalog. DeepSeek thinking controls and provider-visible reasoning are available alongside the answer.
 
-Responses arrive as they are generated. You can stop a request and keep the content received so far, including completed collaboration stages. Each answer retains the identity of the model that produced it.
+Responses arrive as they are generated. You can stop a request and keep the content received so far, including completed Collaborate and Debate stages. Each answer retains the identity of the model that produced it.
 
-History is organized by Chat, Compare and Collaborate, with opening, deletion and reordering. Choose Light, Dark, System or a custom accent. The launcher and mode icons are original Meldwise designs.
+History is organized by Chat, Compare, Collaborate and Debate, with opening, deletion and reordering. Continue Debate in the same conversation; reopening history never automatically resends requests. Choose Light, Dark, System or a custom accent. The launcher and mode icons are original Meldwise designs.
 
 The app uses the local model catalog on startup and refreshes it in the background when empty or more than 24 hours old. The existing catalog stays available if a refresh fails.
 
@@ -100,7 +108,9 @@ The app uses the local model catalog on startup and refreshes it in the backgrou
 
 Read Markdown, plain text and common mathematical expressions. Code blocks have language labels and copy controls, with horizontal scrolling for long lines and manual expansion for longer content. JetBrains Mono and lightweight highlighting make code easier to scan, while copying preserves the original source.
 
-The Composer stays compact at rest and expands naturally as you type or edit multiline text. Chat, Compare and Collaborate share a more consistent reading width and spacing, with quieter model metadata, reasoning disclosure and message actions.
+The Composer stays compact at rest and expands naturally as you type or edit multiline text. All four modes share a more consistent reading width and spacing, with quieter model metadata, reasoning disclosure and message actions.
+
+Compare answers, Collaborate initial answers and reviews, and Debate initial answers can each be collapsed or expanded with a lightweight transition. Model and stage status remain visible. Collapsing does not stop generation, delete content or change model context. Collaborate synthesis and Judge final answers remain directly visible. Disclosure choices are local to the current reading screen and reset when reopened.
 
 Orcex renders math natively using a supported TeX subset. Incomplete, malformed or unsupported expressions retain their source text. Code highlighting uses conservative lexical recognition; uncertain syntax stays plain. Chinese comments use platform font fallback alongside JetBrains Mono.
 
@@ -108,7 +118,7 @@ Orcex renders math natively using a supported TeX subset. Incomplete, malformed 
 
 Credentials, model catalogs and history are stored on your device using Android Keystore-backed AES-256-GCM encryption, with these records excluded from system backup.
 
-Multi-turn requests use a bounded recent selection of visible messages and answers. Continuing or collaborating across providers asks for your confirmation before sharing visible context and outputs, scoped to the current conversation. Only visible messages and answers are included in that shared context; provider-visible reasoning has its own display. Later collaboration rounds primarily use the final synthesis as context, with intermediate stages kept in local history.
+Multi-turn requests use a bounded recent selection of visible messages and answers. Continuing, collaborating or debating across providers asks for your confirmation before sharing visible context and outputs, scoped to the current conversation and exact provider set. Only visible messages and answers are included; provider-visible reasoning has its own display and is never ordinary downstream model context. Later Collaborate rounds primarily use final synthesis; later Debate rounds use user messages and successful Judge final answers. Intermediate stages stay in local history.
 
 Requests use your selected provider and model. Sending, retrying and changing models are your choices. Reopening history restores existing content and status; your next send starts a new request.
 
@@ -122,7 +132,7 @@ When reporting a problem, reproduction steps and sanitized diagnostics are enoug
 
 Meldwise is still in Alpha. Broader device coverage, longer-running validation and the full real-device AndroidTest suite are ongoing. SIWC compatibility remains CONDITIONAL.
 
-Compare currently handles one question at a time. Collaborate uses three stages and retries whole rounds. Debate, Judge, tools, image input and OpenAI API-key access are future directions, along with downgrade recovery for older UI storage formats.
+Compare currently handles one question at a time. Collaborate uses three stages; Debate uses five. Both retry whole rounds with their original model snapshots, without stage-only continuation. Judge synthesizes answers rather than providing competitive scores or quality guarantees. Tools, image input and OpenAI API-key access remain future directions, along with downgrade recovery for older UI storage formats.
 
 ChatGPT model access, usage limits and manual thinking controls depend on your plan, sign-in route and the selected model. The UI shows provider-supplied user-visible content, keeping available ChatGPT summaries and DeepSeek reasoning separate from the final answer. Hidden internal chain-of-thought remains provider-internal.
 

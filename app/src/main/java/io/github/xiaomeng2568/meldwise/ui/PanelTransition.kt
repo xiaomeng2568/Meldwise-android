@@ -17,11 +17,12 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
 import io.github.xiaomeng2568.meldwise.ui.theme.Motion
 
 /** Route-only snapshot: stream updates and selection changes do not start a page transition. */
-internal data class PanelDestination(val panel:ChatPanel,val depth:Int,val modelLane:String?=null) {
+internal data class PanelDestination(val panel:ChatPanel,val depth:Int,val modelLane:String?=null,val debatePicker:Boolean=false) {
     val historyCategory get()=when(panel) {
         ChatPanel.HistoryChat->HistoryCategory.Chat
         ChatPanel.HistoryCompare->HistoryCategory.Compare
         ChatPanel.HistoryCollaborate->HistoryCategory.Collaborate
+        ChatPanel.HistoryDebate->HistoryCategory.Debate
         else->null
     }
     fun directionFrom(previous:PanelDestination)=if(depth<previous.depth) -1 else 1
@@ -31,7 +32,8 @@ internal data class PanelDestination(val panel:ChatPanel,val depth:Int,val model
 @Composable internal fun PanelTransition(navigation:ChatNavigation,modelLane:String?=null,interactive:Boolean=true,
     content:@Composable (PanelDestination)->Unit) {
     val destination=PanelDestination(navigation.panel,navigation.stack.size,
-        modelLane.takeIf {navigation.panel==ChatPanel.Models})
+        modelLane.takeIf {navigation.panel==ChatPanel.Models},
+        navigation.panel==ChatPanel.Models && ChatPanel.DebateSetup in navigation.stack)
     val distance=with(LocalDensity.current) {Motion.panelShift.roundToPx()}
     AnimatedContent(targetState=destination,modifier=Modifier.fillMaxWidth().clipToBounds(),
         contentKey={it.panel},label="panelNavigation",transitionSpec={
