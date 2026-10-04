@@ -11,33 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.xiaomeng2568.meldwise.ui.content.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
-
-/** A few theme-derived tones; custom accents cannot sacrifice code contrast. No provider/stage palette. */
-internal fun codeTokenColors(colors: ColorScheme): Map<CodeTokenRole, Color> {
-    val background = colors.surfaceContainerLow
-    fun readable(candidate: Color): Color {
-        val a = candidate.luminance(); val b = background.luminance()
-        return if ((maxOf(a, b) + .05f) / (minOf(a, b) + .05f) >= 4.5f) candidate else colors.onSurface
-    }
-    return mapOf(
-        CodeTokenRole.Keyword to readable(colors.primary),
-        CodeTokenRole.StringLiteral to readable(lerp(colors.onSurface, colors.primary, .35f)),
-        CodeTokenRole.Number to readable(lerp(colors.onSurface, colors.primary, .35f)),
-        CodeTokenRole.Comment to readable(colors.onSurfaceVariant),
-    )
-}
 
 @Composable internal fun CodeBlockSurface(block: CodeBlock) {
     var expanded by remember(block.text) { mutableStateOf(false) }
@@ -46,10 +26,7 @@ internal fun codeTokenColors(colors: ColorScheme): Map<CodeTokenRole, Color> {
     val tokens = remember(shown, block.language) { CodeHighlighter.tokens(shown, block.language) }
     val colors = codeTokenColors(MaterialTheme.colorScheme)
     val annotated = remember(shown, tokens, colors) {
-        buildAnnotatedString {
-            append(shown)
-            tokens.forEach { addStyle(SpanStyle(color = colors.getValue(it.role)), it.start, it.end) }
-        }
+        colorizedCode(shown, tokens, colors)
     }
     val context = LocalContext.current
     Surface(Modifier.fillMaxWidth().testTag("codeBlock"), shape = Radius.surface, color = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -66,7 +43,7 @@ internal fun codeTokenColors(colors: ColorScheme): Map<CodeTokenRole, Color> {
             }
             SelectionContainer {
                 Text(annotated, Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = Space.content).testTag("codeBody"),
-                    style = codeStyle(), color = MaterialTheme.colorScheme.onSurface, softWrap = CodePresentation.softWrap)
+                    style = highlightedCodeStyle(), softWrap = CodePresentation.softWrap)
             }
             if (long) Row(Modifier.fillMaxWidth().heightIn(min = Sizes.touch).meldwiseClickable(role = Role.Button) { expanded = !expanded }
                 .semantics { contentDescription = if (expanded) "收起代码" else "展开代码"; stateDescription = if (expanded) "已展开" else "已折叠" },

@@ -3,6 +3,8 @@ package io.github.xiaomeng2568.meldwise
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Paint
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,6 +29,29 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ContentComposerUiTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun composedCodeContainsDistinctSyntaxColorsWithoutChangingText() {
+        val raw = "def digest(value: str):\n    # note\n    return \"ok\", 42\n"
+        var colors: Map<CodeTokenRole, androidx.compose.ui.graphics.Color> = emptyMap()
+        compose.setContent { MeldwiseTheme(Appearance.Dark) { colors=codeTokenColors(MaterialTheme.colorScheme)
+            ContentRenderer(ParsedContent(listOf(CodeBlock(raw,"py")),false)) } }
+        val text=compose.onNodeWithTag("codeBody").fetchSemanticsNode().config[SemanticsProperties.Text].single()
+        assertEquals(raw,text.text)
+        val tokens=CodeHighlighter.tokens(raw,"py")
+        assertEquals(tokens.size,text.spanStyles.size)
+        tokens.zip(text.spanStyles).forEach { (token,span) -> assertEquals(colors[token.role],span.item.color) }
+        assertEquals(5,text.spanStyles.map { it.item.color }.toSet().size)
+    }
+    @Test fun embeddedFontResolvesAndRetainsPlatformCjkFallback() {
+        var context: Context? = null
+        compose.setContent { context=LocalContext.current; MeldwiseTheme { ContentRenderer(ContentParser.parse("`ModelRef`\n\n```kt\nval 中文 = 42\n```")) } }
+        compose.runOnIdle {
+            val face=context!!.resources.getFont(R.font.jetbrains_mono_regular)
+            val paint=Paint().apply { typeface=face; textSize=24f; fontFeatureSettings=CodeFontFeatures }
+            assertEquals(paint.measureText("iiii"),paint.measureText("WWWW"),.1f)
+            assertTrue(paint.hasGlyph("中")); assertTrue(paint.hasGlyph("文"))
+        }
+        compose.onNodeWithTag("codeBody").assertExists()
+    }
     @Test fun codeHeaderAndCopyHaveAccessibleTargets() {
         compose.setContent { MeldwiseTheme { ContentRenderer(ContentParser.parse("```py\nprint(1)\n```")) } }
         compose.onNodeWithText("Python").assertExists().assertHasNoClickAction()

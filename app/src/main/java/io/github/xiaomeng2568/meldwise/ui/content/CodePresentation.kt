@@ -44,13 +44,38 @@ internal object CodePresentation {
     fun copySource(source: String) = RenderBounds.prefix(source, clipboardChars)
 }
 
-internal enum class CodeTokenRole { Keyword, StringLiteral, Number, Comment }
+internal enum class CodeTokenRole { Keyword, StringLiteral, Type, Function, Number, Comment }
 internal data class CodeToken(val start: Int, val end: Int, val role: CodeTokenRole)
 
 /** Original bounded lexical colorization, not a compiler/parser. Unsupported or uncertain text stays plain.
  * One forward pass, no recursive grammar or backtracking. Ranges never contain transformed/source text.
  */
 internal object CodeHighlighter {
+    private val functionDeclarations = mapOf("python" to setOf("def"), "kotlin" to setOf("fun"),
+        "javascript" to setOf("function"), "typescript" to setOf("function"))
+    private val typeDeclarations = mapOf("python" to setOf("class"), "kotlin" to setOf("class", "interface", "object", "typealias"),
+        "java" to setOf("class", "interface", "enum"), "javascript" to setOf("class"),
+        "typescript" to setOf("class", "interface", "type"), "csharp" to setOf("class", "interface", "enum"))
+    private val familiarTypes = mapOf(
+        "python" to setOf("str", "int", "float", "bool", "bytes", "list", "dict", "tuple", "set"),
+        "kotlin" to setOf("String", "Int", "Long", "Short", "Byte", "Char", "Float", "Double", "Boolean", "Unit", "Any", "List", "Map", "Set", "Array"),
+        "java" to setOf("String", "Integer", "Long", "Boolean", "Object", "Double", "Float", "List", "Map", "Set"),
+        "typescript" to setOf("string", "number", "boolean", "unknown", "never", "void", "Array", "Promise"),
+        "csharp" to setOf("String", "Boolean", "Object", "List", "Dictionary", "Task"),
+    )
+
+    private fun familiarTypePosition(source: String, start: Int, end: Int, language: String): Boolean {
+        var before = start - 1
+        while (before >= 0 && source[before] in " \t") before--
+        if (language in setOf("python", "kotlin", "typescript") && source.getOrNull(before) == ':') return true
+        if (language in setOf("kotlin", "java", "typescript", "csharp") && source.getOrNull(before) == '<') return true
+        if (language in setOf("java", "csharp")) {
+            var after = end
+            while (after < source.length && source[after] in " \t") after++
+            return after > end && (source.getOrNull(after)?.isLetter() == true || source.getOrNull(after) == '_')
+        }
+        return false
+    }
     private val common = "if else for while do break continue return class switch case default".split(' ').toSet()
     private val java = common + "true false null new public private protected static import package try catch finally throw throws this super interface enum extends implements abstract final void int long short byte char float double boolean synchronized volatile transient native strictfp instanceof assert".split(' ')
     private val js = common + "true false null new const let var function async await export import from in instanceof typeof delete yield try catch finally throw this super extends static".split(' ')
@@ -74,6 +99,7 @@ internal object CodeHighlighter {
         val hashComment = language in setOf("python", "shell", "powershell")
         val result = ArrayList<CodeToken>()
         var i = 0
+        var declaration: CodeTokenRole? = null
         fun add(end: Int, role: CodeTokenRole) { result.add(CodeToken(i, end, role)); i = end }
         while (i < source.length && result.size < CodePresentation.maxTokens) {
             val c = source[i]
@@ -109,7 +135,20 @@ internal object CodeHighlighter {
                 while (end < source.length && (source[end].isLetterOrDigit() || source[end] == '_')) end++
                 val word = source.substring(i, end)
                 val key = if (language in setOf("sql", "powershell")) word.lowercase(Locale.ROOT) else word
-                if (key in words) add(end, CodeTokenRole.Keyword) else i = end
+                val role = when {
+                    key in words -> CodeTokenRole.Keyword
+                    declaration != null -> declaration
+                    word in familiarTypes[language].orEmpty() && familiarTypePosition(source, i, end, language) -> CodeTokenRole.Type
+                    else -> null
+                }
+                if (role != null) add(end, role) else i = end
+                // Only the immediately following name in an explicit declaration is purple.
+                // Arbitrary calls, uppercase identifiers, generic/extension declarations stay plain.
+                declaration = when {
+                    key in functionDeclarations[language].orEmpty() -> CodeTokenRole.Function
+                    key in typeDeclarations[language].orEmpty() -> CodeTokenRole.Type
+                    else -> null
+                }
             } else if (c in '0'..'9' && (i == 0 || !source[i - 1].isLetterOrDigit() && source[i - 1] != '_')) {
                 var end = i + 1
                 while (end < source.length && (source[end] in '0'..'9' || source[end] == '.' && source.getOrNull(end + 1)?.isDigit() == true)) end++
@@ -117,7 +156,11 @@ internal object CodeHighlighter {
                     while (end < source.length && (source[end].isLetterOrDigit() || source[end] in "_.")) end++
                     i = end // Do not guess exponent/hex/unit suffixes.
                 } else add(end, CodeTokenRole.Number)
-            } else i++
+            } else {
+                if (c !in " \t") declaration = null
+                i++
+            }
+            if (c == '#' || c == '/' || c == '"' || c == '\'' || c == '`' || c.isDigit()) declaration = null
         }
         return result
     }
