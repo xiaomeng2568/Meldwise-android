@@ -7,7 +7,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.junit.Assert.*
 import org.junit.Test
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
 
 class UsageContractTests {
     private val a=Usage(1,2,8);private val b=Usage(3,4,20)
@@ -105,13 +105,19 @@ class UsageContractTests {
     @Test fun exactMaxSumValid() {assertEquals(Long.MAX_VALUE,totals(listOf(Usage(null,null,Long.MAX_VALUE-1),Usage(null,null,1))).knownTotalTokens.value)}
     @Test fun unknownTotalNotDerivedFromInputOutput() {assertNull(totals(listOf(Usage(1,2,null),Usage(3,4,null))).knownTotalTokens.value)}
     @Test fun emptyOperationNotCompleteUsage() {val t=UsageTotals.from(operation().snapshot());assertEquals(0,t.requestCount);assertFalse(t.knownTotalTokens.allRequestsReported)}
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test fun parallelHeavyInterleavingHasNoLostUpdates()=runBlocking {
-        val op=operation(UsageMode.DEBATE);val gate=CountDownLatch(5)
-        withContext(Dispatchers.Default) {
+        val op=operation(UsageMode.DEBATE);val gate=CompletableDeferred<Unit>();val arrivals=AtomicInteger()
+        // A suspending barrier allows all five siblings to arrive even on a two-worker CI runner.
+        withContext(Dispatchers.Default.limitedParallelism(2)) {
             UsageSlot.entries.filter {it.mode==UsageMode.DEBATE}.map {slot ->async {
                 op.stream(slot,ref,"stage-${slot.name}") {flow {
-                    gate.countDown();check(gate.await(5,java.util.concurrent.TimeUnit.SECONDS))
-                    repeat(1000) {emit(LlmEvent.UsageDelta(Usage(slot.requestOrdinal.toLong(),null,null)))}
+                    if(arrivals.incrementAndGet()==5) gate.complete(Unit)
+                    withTimeout(5000) {gate.await()}
+                    repeat(1000) {
+                        emit(LlmEvent.UsageDelta(Usage(slot.requestOrdinal.toLong(),null,null)))
+                        if(it%16==0) yield()
+                    }
                     emit(LlmEvent.Completed(Usage(null,null,slot.requestOrdinal.toLong())))
                 }}.collect();op.finish(slot,RequestOutcome.COMPLETED)
             }}.awaitAll()
