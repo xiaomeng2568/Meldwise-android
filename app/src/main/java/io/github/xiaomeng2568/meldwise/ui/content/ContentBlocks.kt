@@ -11,6 +11,9 @@ class WarningBlock(val text: String) : ContentBlock()
 class ErrorBlock(val text: String) : ContentBlock()
 class ReasoningBlock(val summary: ReasoningSummary) : ContentBlock()
 class MathBlock(val source:String,val expression:String):ContentBlock()
+/** Presentation only; never serialized back into the provider text or conversation journal. */
+class TableBlock(val source:String,val header:List<String>,val rows:List<List<String>>,
+    val alignments:List<TableAlignment>):ContentBlock()
 enum class ReasoningState { Unavailable, Waiting, Streaming, Thinking, Available, Completed, Interrupted }
 enum class ReasoningKind { Summary, UserVisibleContent }
 /** Separately supplied, reviewed user-visible provider content; never inferred from answers. */
@@ -46,9 +49,11 @@ object ContentParser {
         val lines = bounded.split('\n')
         val blocks = mutableListOf<ContentBlock>()
         var i = 0
+        var tableCells = 0
         while (i < lines.size && blocks.size < RenderBounds.BLOCKS) {
             val line = lines[i].removeSuffix("\r")
             val open = fence.matchEntire(line)
+            val table = if (!special(line) && line.isNotBlank()) PipeTableParser.candidate(lines,i,::special) else null
             when {
                 open != null -> {
                     val delimiter = open.groupValues[1]
@@ -87,9 +92,18 @@ object ContentParser {
                     }
                     blocks += QuoteBlock(quote.joinToString("\n"))
                 }
+                table != null -> {
+                    val cellCount=table.block?.let {it.header.size*(it.rows.size+1)} ?: 0
+                    if(table.block!=null && tableCells+cellCount<=TableBounds.DOCUMENT_CELLS) {
+                        blocks+=table.block
+                        tableCells+=cellCount
+                    } else blocks+=TextBlock(table.source)
+                    i = table.endExclusive
+                }
                 else -> {
                     val paragraph = mutableListOf(line); i++
-                    while (i < lines.size && lines[i].isNotBlank() && !special(lines[i].removeSuffix("\r"))) {
+                    while (i < lines.size && lines[i].isNotBlank() && !special(lines[i].removeSuffix("\r")) &&
+                        PipeTableParser.candidate(lines,i,::special)==null) {
                         paragraph += lines[i].removeSuffix("\r"); i++
                     }
                     blocks += TextBlock(paragraph.joinToString("\n"))

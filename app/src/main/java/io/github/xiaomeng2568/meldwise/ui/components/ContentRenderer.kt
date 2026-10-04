@@ -51,6 +51,7 @@ fun copyContent(context: Context, text: String) {
                 is MathBlock -> DisplayMath(block)
                 is PlainTextBlock -> LiteralSurface(block.text,"纯文本 · Plain text")
                 is CodeBlock -> CodeBlockSurface(block)
+                is TableBlock -> MarkdownTable(block)
                 is QuoteBlock -> {
                     val rule=MaterialTheme.colorScheme.outlineVariant
                     Box(Modifier.fillMaxWidth().drawBehind {drawLine(rule,Offset.Zero,Offset(0f,size.height),1.dp.toPx())}
