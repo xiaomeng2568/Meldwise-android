@@ -2,7 +2,9 @@ package io.github.xiaomeng2568.meldwise.ui.content
 
 /** Render-time values only. Original provider text remains in the encrypted journal. */
 sealed class ContentBlock { override fun toString() = "ContentBlock([REDACTED])" }
-class TextBlock(val text: String, val heading: Int = 0, val listMarker: String? = null) : ContentBlock()
+class TextBlock(val text: String, val heading: Int = 0, val listMarker: String? = null,
+    val listDepth:Int=0,val taskChecked:Boolean?=null) : ContentBlock()
+class ThematicBreakBlock : ContentBlock()
 class PlainTextBlock(val text: String) : ContentBlock()
 class CodeBlock(val text: String, val language: String? = null) : ContentBlock()
 class QuoteBlock(val text: String) : ContentBlock()
@@ -44,6 +46,13 @@ object ContentParser {
     private val bullet = Regex("^[ \\t]*[-+*][ \\t]+(.+)$")
     private val numbered = Regex("^[ \\t]*(\\d{1,6})[.)][ \\t]+(.+)$")
     private val fence = Regex("^[ ]{0,3}(`{3,}|~{3,})(.*)$")
+    private val task = Regex("^\\[([ xX])\\][ \\t]+(.+)$")
+    private fun thematic(line:String):Boolean {
+        if(line.takeWhile {it==' '}.length>3 || line.startsWith('\t')) return false
+        val marks=line.filterNot {it==' ' || it=='\t'}
+        return marks.length>=3 && marks[0] in "-*_" && marks.all {it==marks[0]}
+    }
+    private fun listDepth(line:String)=line.takeWhile {it==' ' || it=='\t'}.sumOf {if(it=='\t') 4 else 1}.div(2).coerceAtMost(4)
     fun parse(original: String): ParsedContent {
         val bounded = RenderBounds.prefix(original, RenderBounds.DOCUMENT_CHARS)
         val lines = bounded.split('\n')
@@ -76,14 +85,21 @@ object ContentParser {
                     blocks += TextBlock(body.toString())
                 }
                 line.isBlank() -> i++
+                thematic(line) -> {blocks+=ThematicBreakBlock();i++}
                 heading.matches(line) -> {
                     val h = heading.matchEntire(line)!!
                     blocks += TextBlock(h.groupValues[2], h.groupValues[1].length); i++
                 }
-                bullet.matches(line) -> { blocks += TextBlock(bullet.matchEntire(line)!!.groupValues[1], listMarker = "•"); i++ }
+                bullet.matches(line) -> {
+                    val body=bullet.matchEntire(line)!!.groupValues[1];val check=task.matchEntire(body)
+                    blocks += TextBlock(check?.groupValues?.get(2) ?: body,listMarker="•",listDepth=listDepth(line),
+                        taskChecked=check?.groupValues?.get(1)?.let {it!=" "});i++
+                }
                 numbered.matches(line) -> {
                     val n = numbered.matchEntire(line)!!
-                    blocks += TextBlock(n.groupValues[2], listMarker = "${n.groupValues[1]}."); i++
+                    val check=task.matchEntire(n.groupValues[2])
+                    blocks += TextBlock(check?.groupValues?.get(2) ?: n.groupValues[2], listMarker = "${n.groupValues[1]}.",
+                        listDepth=listDepth(line),taskChecked=check?.groupValues?.get(1)?.let {it!=" "}); i++
                 }
                 line.trimStart().startsWith(">") -> {
                     val quote = mutableListOf<String>()
@@ -116,7 +132,7 @@ object ContentParser {
     private fun splitDisplayMath(block:TextBlock):List<ContentBlock> {
         if(InlineParser.parse(block.text).none {it.style==InlineStyle.DisplayMath}) return listOf(block)
         val result=mutableListOf<ContentBlock>();val text=StringBuilder()
-        fun flush() {if(text.isNotBlank()) result+=TextBlock(text.toString(),block.heading,block.listMarker);text.clear()}
+        fun flush() {if(text.isNotBlank()) result+=TextBlock(text.toString(),block.heading,block.listMarker,block.listDepth,block.taskChecked);text.clear()}
         var offset=0
         while(offset<block.text.length) {
             if(block.text[offset]=='`') {
@@ -129,16 +145,18 @@ object ContentParser {
         }
         flush();return result
     }
-    private fun special(line: String) = fence.matches(line) || heading.matches(line) || bullet.matches(line) ||
+    private fun special(line: String) = fence.matches(line) || thematic(line) || heading.matches(line) || bullet.matches(line) ||
         numbered.matches(line) || line.trimStart().startsWith(">") || MathDelimiters.displayStart(line.trimStart())
 }
-enum class InlineStyle { Normal, Strong, Emphasis, Code, Math, DisplayMath }
-class InlineRun(val text: String, val style: InlineStyle,val expression:String?=null) {
+enum class InlineStyle { Normal, Strong, Emphasis, StrongEmphasis, Strike, Code, Math, DisplayMath }
+class InlineRun(val text: String, val style: InlineStyle,val expression:String?=null,
+    val strong:Boolean=false,val emphasis:Boolean=false,val strike:Boolean=false) {
     override fun toString() = "InlineRun(style=$style, text=[REDACTED])"
 }
 object InlineParser {
-    fun parse(original: String): List<InlineRun> {
-        val text = RenderBounds.prefix(original, RenderBounds.INLINE_CHARS)
+    fun parse(original:String):List<InlineRun> = fragment(RenderBounds.prefix(original,RenderBounds.INLINE_CHARS),0)
+    // Fixed nesting ceiling; incomplete/ambiguous delimiters stay literal. Not a recursive document engine.
+    private fun fragment(text:String,depth:Int):List<InlineRun> {
         val result = mutableListOf<InlineRun>(); val plain = StringBuilder()
         fun flush() { if (plain.isNotEmpty()) { result += InlineRun(plain.toString(), InlineStyle.Normal); plain.clear() } }
         var i = 0
@@ -154,19 +172,42 @@ object InlineParser {
             if(text.startsWith("\\(",i) || text.startsWith("\\[",i) || text.startsWith("$$",i)) {plain.append(text.substring(i));break}
             if(text[i]=='$' && i+1<text.length && (text[i+1].isLetter() || text[i+1]=='\\') &&
                 text.indexOf('$',i+1)<0) {plain.append(text.substring(i));break}
-            if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in "\\`*{}[]()#+-.!_>$") { plain.append(text[i + 1]); i += 2; continue }
+            if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in "\\`*{}[]()#+-.!_>$~") { plain.append(text[i + 1]); i += 2; continue }
             val marker = when {
+                depth>=4 -> null
+                text.startsWith("***",i)->"***";text.startsWith("___",i) && (i==0 || !text[i-1].isLetterOrDigit())->"___"
+                text.startsWith("~~",i)->"~~"
                 text[i] == '`' -> "`"; text.startsWith("**", i) -> "**"; text.startsWith("__", i) -> "__"
                 text[i] == '*' -> "*"; text[i] == '_' && (i == 0 || !text[i - 1].isLetterOrDigit()) -> "_"; else -> null
             }
-            val end = marker?.let { text.indexOf(it, i + it.length) } ?: -1
+            var end = marker?.let {closing(text,it,i+it.length)} ?: -1
+            // The final '*' in **strong *emphasis*** belongs to the inner emphasis.
+            if(marker in listOf("**","__") && end>i && end+2<text.length && text[end+2]==marker!![0] &&
+                text.substring(i+2,end).count {it==marker[0]}%2==1) end++
             if (marker != null && end > i + marker.length) {
                 flush()
-                result += InlineRun(text.substring(i + marker.length, end), when(marker) {
-                    "`" -> InlineStyle.Code; "**", "__" -> InlineStyle.Strong; else -> InlineStyle.Emphasis
-                }); i = end + marker.length
+                val style=when(marker) {"`"->InlineStyle.Code;"**","__"->InlineStyle.Strong
+                    "***","___"->InlineStyle.StrongEmphasis;"~~"->InlineStyle.Strike;else->InlineStyle.Emphasis}
+                val inner=text.substring(i+marker.length,end)
+                if(style==InlineStyle.Code) result+=InlineRun(inner,style) else fragment(inner,depth+1).forEach {run ->
+                    result+=InlineRun(run.text,if(run.style==InlineStyle.Normal) style else run.style,run.expression,
+                        run.strong || style in setOf(InlineStyle.Strong,InlineStyle.StrongEmphasis),
+                        run.emphasis || style in setOf(InlineStyle.Emphasis,InlineStyle.StrongEmphasis),
+                        run.strike || style==InlineStyle.Strike)
+                };i=end+marker.length
             } else { plain.append(text[i]); i++ }
         }
         flush(); return result
+    }
+    private fun closing(text:String,marker:String,start:Int):Int {
+        var i=start
+        while(i<text.length) {
+            val math=MathDelimiters.at(text,i);if(math!=null) {i=math.end;continue}
+            if(text[i]=='\\') {i+=2;continue}
+            if(text[i]=='`') {val end=MathDelimiters.codeEnd(text,i);if(end>i) {i=end;continue}}
+            if(text.startsWith(marker,i)) return i
+            i++
+        }
+        return -1
     }
 }

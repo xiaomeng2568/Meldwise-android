@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.*
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -88,12 +89,16 @@ private object MathWorker {
                         MathCanvas(math,run.text,Modifier.fillMaxSize())
                     }
                     appendInlineContent(key,run.text)
-                } else withStyle(when(run.style) {
+                } else withStyle((when(run.style) {
                     InlineStyle.Strong->SpanStyle(fontWeight=FontWeight.Bold)
                     InlineStyle.Emphasis->SpanStyle(fontStyle=FontStyle.Italic)
+                    InlineStyle.StrongEmphasis->SpanStyle(fontWeight=FontWeight.Bold,fontStyle=FontStyle.Italic)
+                    InlineStyle.Strike->SpanStyle(textDecoration=TextDecoration.LineThrough)
                     InlineStyle.Code->inlineCodeSpan(colors.surfaceVariant)
                     else->SpanStyle()
-                }) {append(run.text)}
+                }).merge(SpanStyle(fontWeight=if(run.strong) FontWeight.Bold else null,
+                    fontStyle=if(run.emphasis) FontStyle.Italic else null,
+                    textDecoration=if(run.strike) TextDecoration.LineThrough else null))) {append(run.text)}
             }
         }
         SelectionContainer {Text(annotated,style=style,inlineContent=inline)}

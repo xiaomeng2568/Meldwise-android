@@ -48,6 +48,8 @@ fun copyContent(context: Context, text: String) {
         content.blocks.forEach { block ->
             when(block) {
                 is TextBlock -> RichTextBlock(block)
+                is ThematicBreakBlock -> HorizontalDivider(Modifier.fillMaxWidth().semantics {contentDescription="分隔线"},
+                    color=MaterialTheme.colorScheme.outlineVariant)
                 is MathBlock -> DisplayMath(block)
                 is PlainTextBlock -> LiteralSurface(block.text,"纯文本 · Plain text")
                 is CodeBlock -> CodeBlockSurface(block)
@@ -73,8 +75,9 @@ fun copyContent(context: Context, text: String) {
         in 3..6 -> MaterialTheme.typography.titleMedium
         else -> MaterialTheme.typography.bodyLarge
     }
-    Row(horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-        block.listMarker?.let { Text(it,style=style) }
+    Row(Modifier.padding(start=(block.listDepth.coerceIn(0,4)*12).dp),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
+        block.listMarker?.let { Text(if(block.taskChecked==null) it else if(block.taskChecked) "☑" else "☐",style=style,
+            modifier=if(block.taskChecked==null) Modifier else Modifier.semantics {contentDescription=if(block.taskChecked) "已完成任务" else "未完成任务"}) }
         Column(Modifier.weight(1f)) {
             MathRichText(block.text,style)
             if(block.text.length>RenderBounds.INLINE_CHARS) Text("本段较长，切换纯文本查看更多。",style=MaterialTheme.typography.bodySmall)
