@@ -1,8 +1,8 @@
 # Meldwise
 
-Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型一直聊下去，把同一个问题交给两个模型分别回答，让两个模型接力审阅，也可以让它们互相检查，再由 Judge 整理最终答案。
+Meldwise 是一个 Android 多模型聊天客户端。你可以和一个模型持续聊天，把同一个问题交给两个模型分别回答，让它们接力审阅、完善答案，或互相检查后由 Judge 整理最终答案。
 
-当前公开版本：[**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1)，首个 Beta 预发行版。Alpha 阶段建立了四种核心聊法；Beta 从这里开始，重点转向稳定性、兼容性、用量透明与更成熟的历史和恢复体验。
+当前公开版本：[**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1)，首个 Beta 预发行版。四种核心聊法已在 Alpha 阶段成形，接下来的 Beta 会更多打磨稳定性、兼容性、用量透明度，以及历史记录和恢复体验。
 
 ## 四种聊法
 
@@ -81,9 +81,9 @@ ChatGPT 的可用模型、额度和手动思考设置取决于你的套餐、登
 
 # English
 
-Meldwise is an Android multi-model chat client. Keep a conversation going with one model, compare two independent answers, have two models refine an answer together, or let them cross-review before a Judge puts together the final answer.
+Meldwise is an Android multi-model chat client. Keep chatting with one model, compare two independent answers, have two models refine an answer together, or let them cross-review before a Judge brings it all together.
 
-The current public release is [**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1), the first Beta prerelease. Alpha established the four core workflows; Beta now focuses on stability, compatibility, usage transparency and more mature history and recovery behavior.
+The current public release is [**0.3.0 Beta 1**](https://github.com/xiaomeng2568/Meldwise-android/releases/tag/v0.3.0-beta.1), the first Beta prerelease. With the four core ways to chat in place, Beta focuses on stability, compatibility, clearer usage information and a smoother history and recovery experience.
 
 ## Four ways to chat
 
