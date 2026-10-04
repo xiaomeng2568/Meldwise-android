@@ -41,7 +41,7 @@ Compare 仍为单轮对比。协作目前支持整轮手动重试，尚不支持
 
 ## 本地构建
 
-工程使用 Kotlin、Jetpack Compose、Material 3 和 OkHttp。需要 JDK 17、Android SDK 35、Gradle 8.13。工程和 SDK 路径建议使用英文字符，避开空格；在本机 `local.properties` 中配置 SDK 路径。
+工程使用 Kotlin、Jetpack Compose、Material 3 和 OkHttp。需要 JDK 17、Android SDK 36、Gradle 8.13。工程和 SDK 路径建议使用英文字符，避开空格；在本机 `local.properties` 中配置 SDK 路径。
 
 ```sh
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
@@ -100,7 +100,7 @@ Report issues with reproduction steps and sanitized diagnostics. Keep keys, toke
 
 ## Build
 
-Use JDK 17, Android SDK 35 and Gradle 8.13. Keep project and SDK paths ASCII and space-free, and configure the SDK in your local `local.properties`.
+Use JDK 17, Android SDK 36 and Gradle 8.13. Keep project and SDK paths ASCII and space-free, and configure the SDK in your local `local.properties`.
 
 ```sh
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug

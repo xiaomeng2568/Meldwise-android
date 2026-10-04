@@ -20,21 +20,20 @@ val releaseSigningInputs = listOf(
 val hasReleaseSigning = releaseSigningInputs.values.all { it.isPresent && it.get().isNotBlank() }
 android {
     namespace = "io.github.xiaomeng2568.meldwise"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "io.github.xiaomeng2568.meldwise"
         minSdk = 26
         targetSdk = 35
-        versionCode = 209
-        versionName = "0.2.0-alpha.1"
+        versionCode = 210
+        versionName = "0.2.0-alpha.2-community-validation"
         manifestPlaceholders["appLabel"] = "Meldwise"
-        resValue("string", "public_alpha_version", "0.2.0 Alpha 1")
+        resValue("string", "public_alpha_version", "0.2.0 Alpha 2 · 社区修复验证")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/legalAssets"))
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
     signingConfigs {
         if (hasReleaseSigning) {
             create("meldwiseRelease") {
@@ -59,6 +58,7 @@ android {
     }
     testOptions { unitTests.all { it.systemProperty("projectRoot", rootDir.absolutePath) } }
 }
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 tasks.named("preBuild").configure { dependsOn(prepareLegalAssets) }
 
 dependencies {
@@ -72,6 +72,8 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.jose4j)
+    implementation(libs.orcex.android)
+    implementation(libs.orcex.font)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.mockwebserver)

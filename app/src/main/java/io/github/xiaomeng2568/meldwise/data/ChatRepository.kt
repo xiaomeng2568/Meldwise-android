@@ -211,7 +211,8 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
     private fun prepareCollaborate(userText:String,retry:CollaborateRound?):PreparedCollaborate {
         load();require(mode()==ConversationMode.Collaborate)
         val config=retry?.config ?: requireNotNull(collaborateConfig());validCollaborateConfig(config)
-        val context=contextBuilder.build(contextMessages(current()),userText)
+        val recent=contextBuilder.build(contextMessages(current()),userText)
+        val context=if(retry==null) recent else VisibleContext(retry.frozenInput.map {LlmMessage(it.role,it.text)},recent.sourceProviders)
         val needs=(config.providers.size>1 || context.sourceProviders.any {it !in config.providers}) &&
             config.providerSetKey !in (current()?.collaborateGrants ?: emptySet())
         return PreparedCollaborate(conversationId(),messages().lastOrNull()?.id,userText,config,context,needs,revision,retry?.roundId)
@@ -231,9 +232,9 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
         val time=clock();val user=ChatMessage(MessageIds.create(),messages().lastOrNull()?.id,MessageRole.USER,plan.text,
             MessageState.COMPLETED,order=messages().size,timestamp=time,modelRef=plan.config.primary.ref)
         val stages=CollaborateStageType.entries.mapIndexed {index,type ->CollaborateStage(MessageIds.create(),type,index,
-            if(index==1) plan.config.reviewer else plan.config.primary)}
+            plan.config.modelFor(type))}
         val round=CollaborateRound(MessageIds.create(),user.id,stages,plan.context.messages.map {FrozenVisibleInput(it.role,it.text)},
-            revision,time,time,retryOf=plan.retryOf)
+            revision,time,time,retryOf=plan.retryOf,reviewIntensity=plan.config.reviewIntensity,synthesisRole=plan.config.synthesisRole)
         val c=current() ?: Conversation(draftId,plan.config.primary.ref,emptyList(),conversationTitle(plan.text),time,time,
             mode=ConversationMode.Collaborate,collaborate=plan.config)
         val next=c.copy(messages=c.messages+user,rounds=c.rounds+round,updatedAt=time,
@@ -327,7 +328,7 @@ class ChatRepository(private val blob:AtomicBlob,private val box:AesGcmBox,
             require(r.retryOf==null || c.rounds.take(roundIndex).any {it.roundId==r.retryOf && !it.lifecycle.active && it.lifecycle!=CollaborateRoundState.Complete})
             require(r.stages.map {it.type}==CollaborateStageType.entries && r.stages.map {it.order}==listOf(0,1,2))
             require(r.stages.map {it.stageId}.distinct().size==3 && r.stages.none {it.stageId in c.messages.map {m ->m.id}})
-            validCollaborateConfig(r.config);require(r.stages.last().model==r.stages.first().model)
+            validCollaborateConfig(r.config);require(r.stages.all {it.model==r.config.modelFor(it.type)})
             require(r.frozenInput.size in 1..41 && r.frozenInput.last().role==MessageRole.USER && r.frozenInput.last().text==c.messages[roundIndex].text)
             require(r.frozenInput.withIndex().all {(i,m) ->m.role==if(i%2==0) MessageRole.USER else MessageRole.ASSISTANT})
             require(r.frozenInput.sumOf {utf8ContentSize(it.text).toLong()}<=131072)

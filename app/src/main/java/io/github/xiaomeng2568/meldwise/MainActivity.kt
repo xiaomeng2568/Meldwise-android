@@ -20,6 +20,7 @@ import androidx.compose.ui.window.SecureFlagPolicy
 import androidx.core.view.WindowCompat
 import androidx.core.content.edit
 import io.github.xiaomeng2568.meldwise.ui.*
+import io.github.xiaomeng2568.meldwise.ui.components.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
 
 class MainActivity:ComponentActivity() {
@@ -65,7 +66,7 @@ class MainActivity:ComponentActivity() {
                         viewModel::newChat,viewModel::setThinking,{s ->viewModel.startCompare(s.prompt,s.a,s.b,s.pa,s.pb)},
                         viewModel::openSession,viewModel::openCompare,viewModel::clearCompareDraft,
                         viewModel::deleteHistory,viewModel::moveHistory,viewModel::dismissCatalogNotice,
-                        viewModel::newCollaborate,viewModel::configureCollaborate,viewModel::retryCollaborate)
+                        viewModel::newCollaborate,viewModel::configureCollaborate,viewModel::retryCollaborate,viewModel::refreshProviderModels)
                 }
                 ChatScreen(screen,auth,apiState,inference,processing,appearance,{mode ->
                     appearance=mode;preferences.edit {putString("mode",mode.name)}
@@ -87,8 +88,8 @@ class MainActivity:ComponentActivity() {
                                 visualTransformation=PasswordVisualTransformation(),singleLine=true,
                                 keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password))
                         }},
-                        confirmButton={TextButton(enabled=key.isNotBlank() && !screen.busy,onClick={viewModel.saveApiKey(key);key="";configure=false}) {Text("保存")}},
-                        dismissButton={TextButton(onClick={key="";configure=false}) {Text("取消")}})
+                        confirmButton={MeldwiseTextButton(enabled=key.isNotBlank() && !screen.busy,onClick={viewModel.saveApiKey(key);key="";configure=false}) {Text("保存")}},
+                        dismissButton={MeldwiseTextButton(onClick={key="";configure=false}) {Text("取消")}})
                 }
             }
         }

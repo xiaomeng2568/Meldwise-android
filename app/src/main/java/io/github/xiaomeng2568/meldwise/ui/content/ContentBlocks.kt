@@ -10,6 +10,7 @@ class InfoBlock(val text: String) : ContentBlock()
 class WarningBlock(val text: String) : ContentBlock()
 class ErrorBlock(val text: String) : ContentBlock()
 class ReasoningBlock(val summary: ReasoningSummary) : ContentBlock()
+class MathBlock(val source:String,val expression:String):ContentBlock()
 enum class ReasoningState { Unavailable, Waiting, Streaming, Thinking, Available, Completed, Interrupted }
 enum class ReasoningKind { Summary, UserVisibleContent }
 /** Separately supplied, reviewed user-visible provider content; never inferred from answers. */
@@ -62,6 +63,13 @@ object ContentParser {
                     blocks += if (label.lowercase() in setOf("text", "txt", "plain", "plaintext"))
                         PlainTextBlock(raw) else CodeBlock(raw, label.ifBlank { null })
                 }
+                MathDelimiters.displayStart(line.trimStart()) -> {
+                    // Blank lines are legal inside display math. Never consume a code fence.
+                    val body=StringBuilder(line);i++
+                    while(MathDelimiters.at(body.toString(),body.indexOfFirst { !it.isWhitespace() })==null &&
+                        i<lines.size && !fence.matches(lines[i])) {body.append('\n').append(lines[i].removeSuffix("\r"));i++}
+                    blocks += TextBlock(body.toString())
+                }
                 line.isBlank() -> i++
                 heading.matches(line) -> {
                     val h = heading.matchEntire(line)!!
@@ -88,13 +96,30 @@ object ContentParser {
                 }
             }
         }
-        return ParsedContent(blocks, bounded.length < original.length || i < lines.size)
+        val expanded=blocks.flatMap {block ->if(block is TextBlock) splitDisplayMath(block) else listOf(block)}
+        return ParsedContent(expanded.take(RenderBounds.BLOCKS), bounded.length < original.length || i < lines.size || expanded.size>RenderBounds.BLOCKS)
+    }
+    private fun splitDisplayMath(block:TextBlock):List<ContentBlock> {
+        if(InlineParser.parse(block.text).none {it.style==InlineStyle.DisplayMath}) return listOf(block)
+        val result=mutableListOf<ContentBlock>();val text=StringBuilder()
+        fun flush() {if(text.isNotBlank()) result+=TextBlock(text.toString(),block.heading,block.listMarker);text.clear()}
+        var offset=0
+        while(offset<block.text.length) {
+            if(block.text[offset]=='`') {
+                val end=MathDelimiters.codeEnd(block.text,offset)
+                if(end>offset) {text.append(block.text.substring(offset,end));offset=end;continue}
+            }
+            val match=MathDelimiters.at(block.text,offset)
+            if(match?.display==true) {flush();result+=MathBlock(match.source,match.expression);offset=match.end}
+            else {text.append(block.text[offset]);offset++}
+        }
+        flush();return result
     }
     private fun special(line: String) = fence.matches(line) || heading.matches(line) || bullet.matches(line) ||
-        numbered.matches(line) || line.trimStart().startsWith(">")
+        numbered.matches(line) || line.trimStart().startsWith(">") || MathDelimiters.displayStart(line.trimStart())
 }
-enum class InlineStyle { Normal, Strong, Emphasis, Code }
-class InlineRun(val text: String, val style: InlineStyle) {
+enum class InlineStyle { Normal, Strong, Emphasis, Code, Math, DisplayMath }
+class InlineRun(val text: String, val style: InlineStyle,val expression:String?=null) {
     override fun toString() = "InlineRun(style=$style, text=[REDACTED])"
 }
 object InlineParser {
@@ -104,7 +129,18 @@ object InlineParser {
         fun flush() { if (plain.isNotEmpty()) { result += InlineRun(plain.toString(), InlineStyle.Normal); plain.clear() } }
         var i = 0
         while (i < text.length) {
-            if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in "\\`*{}[]()#+-.!_>") { plain.append(text[i + 1]); i += 2; continue }
+            if(text[i]=='`') {
+                val codeEnd=MathDelimiters.codeEnd(text,i)
+                if(codeEnd>i) {val count=text.substring(i).takeWhile {it=='`'}.length;flush()
+                    result+=InlineRun(text.substring(i+count,codeEnd-count),InlineStyle.Code);i=codeEnd;continue}
+            }
+            val math=MathDelimiters.at(text,i)
+            if(math!=null) {flush();result+=InlineRun(math.source,if(math.display) InlineStyle.DisplayMath else InlineStyle.Math,math.expression);i=math.end;continue}
+            // Incomplete streams retain their exact opening delimiter.
+            if(text.startsWith("\\(",i) || text.startsWith("\\[",i) || text.startsWith("$$",i)) {plain.append(text.substring(i));break}
+            if(text[i]=='$' && i+1<text.length && (text[i+1].isLetter() || text[i+1]=='\\') &&
+                text.indexOf('$',i+1)<0) {plain.append(text.substring(i));break}
+            if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in "\\`*{}[]()#+-.!_>$") { plain.append(text[i + 1]); i += 2; continue }
             val marker = when {
                 text[i] == '`' -> "`"; text.startsWith("**", i) -> "**"; text.startsWith("__", i) -> "__"
                 text[i] == '*' -> "*"; text[i] == '_' && (i == 0 || !text[i - 1].isLetterOrDigit()) -> "_"; else -> null

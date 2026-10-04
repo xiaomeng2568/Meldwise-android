@@ -150,8 +150,11 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
         }
     }
     fun loadModels() {
+        refreshProviderModels(screen.value.providerId)
+    }
+    fun refreshProviderModels(id:String) {
         if(screen.value.busy) return
-        val id=screen.value.providerId
+        if(id !in setOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK)) return
         loadJob=viewModelScope.launch {catalogLoader.load(id)}
     }
     fun select(id:String) {
@@ -279,14 +282,14 @@ class MainViewModel(private val container:AppContainer):ViewModel() {
             replace(messages=withContext(Dispatchers.IO) {container.chat.newCollaborate()});compareRun.value=null;refreshHistory()
         } catch(_:Exception) {replace(error="LOCAL_STORAGE_UNAVAILABLE")} finally {replace(busy=false,error=screen.value.error)} }
     }
-    fun configureCollaborate(selection:CompareSubmission) {
+    fun configureCollaborate(selection:CollaborateSubmission) {
         if(screen.value.busy || conversationMode.value!=ConversationMode.Collaborate) return
         fun model(ref:ModelRef,p:ReasoningPreference):CollaborateModel? {
             val item=cache.value[ref.providerId]?.firstOrNull {it.id==ref.modelId} ?: return null
             return CollaborateModel(ref,item.displayName,p)
         }
         val a=model(selection.a,selection.pa) ?: return;val b=model(selection.b,selection.pb) ?: return
-        val config=CollaborateConfig(a,b)
+        val config=CollaborateConfig(a,b,selection.reviewIntensity,selection.synthesisRole)
         if(a.ref==b.ref || !ReasoningPolicy.supported(a.ref,a.preference) || !ReasoningPolicy.supported(b.ref,b.preference)) return
         clearSharing();replace(busy=true)
         viewModelScope.launch {try {

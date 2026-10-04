@@ -47,7 +47,7 @@ fun collaborateMessageItems(c:Conversation):List<CollaborateMessageItem> {
                     s.error?.let {kind ->
                         Text(collaborateErrorLabel(kind),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
                         var details by remember {mutableStateOf(false)}
-                        TextButton(onClick={details=!details}) {Text(if(details) "收起详情" else "查看详情")}
+                        MeldwiseTextButton(onClick={details=!details}) {Text(if(details) "收起详情" else "查看详情")}
                         if(details) Text("${collaborateStageLabel(s.type)} · providerId=${s.model.ref.providerId} · ${kind.name}",
                             style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
