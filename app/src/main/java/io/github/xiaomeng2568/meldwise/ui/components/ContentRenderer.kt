@@ -35,8 +35,7 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.reasoningStatus
 
 /** User-initiated clipboard only. Never feeds content into diagnostics, traces, or toString. */
 fun copyContent(context: Context, text: String) {
-    val bound=131072
-    val copied=RenderBounds.prefix(text,bound)
+    val copied=CodePresentation.copySource(text)
     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Meldwise",copied))
     Toast.makeText(context,if(copied.length<text.length) "内容较长，已复制前 128K 字符" else "已复制",Toast.LENGTH_SHORT).show()
 }
@@ -51,7 +50,7 @@ fun copyContent(context: Context, text: String) {
                 is TextBlock -> RichTextBlock(block)
                 is MathBlock -> DisplayMath(block)
                 is PlainTextBlock -> LiteralSurface(block.text,"纯文本 · Plain text")
-                is CodeBlock -> LiteralSurface(block.text,block.language ?: "代码 · Code")
+                is CodeBlock -> CodeBlockSurface(block)
                 is QuoteBlock -> {
                     val rule=MaterialTheme.colorScheme.outlineVariant
                     Box(Modifier.fillMaxWidth().drawBehind {drawLine(rule,Offset.Zero,Offset(0f,size.height),1.dp.toPx())}

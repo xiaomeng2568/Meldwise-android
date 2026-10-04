@@ -6,9 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -205,14 +201,17 @@ private typealias Panel = ChatPanel
                 if(!compareMode && !collaborateMode && !ready && !screen.busy) MeldwiseTextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
                     Text(if(chatgpt) "连接 ChatGPT 后开始聊天" else "配置 DeepSeek 密钥后开始聊天")
                 }
-                Composer(input,{if(it.length<=32768) input=it},screen.busy,
+                val summary=composerSummary(if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else HistoryCategory.Chat,
+                    if(screen.selected==null) "选择模型" else name,if(chatgpt) "默认" else preferenceLabel(foundation.thinking),reviewIntensityLabel(reviewIntensity))
+                AdaptiveComposer(input,{if(it.length<=32768) input=it},screen.busy,
                     input.isNotBlank() && if(compareMode || collaborateMode) available(modelA) && available(modelB) && modelA!=modelB &&
                         (!collaborateMode || foundation.collaborate?.primary?.ref==modelA && foundation.collaborate?.reviewer?.ref==modelB) else ready && screen.selected!=null,
                     onSend={if(compareMode) {val a=modelA;val b=modelB;if(a!=null && b!=null) actions.compare(CompareSubmission(input,a,b,effortA,effortB));input=""} else actions.send(input)},
                     onStop=actions.cancel,onThinking={navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Thinking)},
                     compareMode=compareMode,option=composerOption(compareMode || collaborateMode,foundation.thinking!=ReasoningPreference.Off && chatgpt.not()),
                     options=navigation.composerOptions,onOptions={navigation=navigation.copy(composerOptions=it)},
-                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else "发送消息")
+                    sendLabel=if(compareMode) "同时询问" else if(collaborateMode) "开始协作" else "发送消息",
+                    imeVisible=keyboardVisible,summary=summary,onConfiguration={pickingLane=null;navigation=navigation.open(summary.configuration)})
                 Text(if(compareMode || collaborateMode) "按各自服务计费 · 记录留在本机" else if(chatgpt) "ChatGPT 套餐" else "DeepSeek API 计费",
                     style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier=Modifier.align(Alignment.CenterHorizontally).padding(bottom=Space.small))
@@ -322,30 +321,6 @@ private typealias Panel = ChatPanel
     }
 }
 
-@Composable private fun Composer(input: String, onInput: (String)->Unit, busy: Boolean, canSend: Boolean,
-    onSend: ()->Unit, onStop: ()->Unit,onThinking:()->Unit,compareMode:Boolean,option:ComposerOption,
-    options:Boolean,onOptions:(Boolean)->Unit,sendLabel:String) {
-    Box(Modifier.fillMaxWidth().testTag("composer").animateContentSize(tween(Motion.switchMs,easing=Motion.easing))) {
-        Surface(Modifier.matchParentSize().padding(vertical=Sizes.composerInset).testTag("composerSurface"),shape=Radius.surface,
-            color=MaterialTheme.colorScheme.surfaceContainerLow) {}
-        Column {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                SoftAction(Glyph.Plus,"更多输入选项",{onOptions(!options)},enabled=!busy,tonal=false)
-                BasicTextField(value=input,onValueChange=onInput,enabled=!busy,textStyle=MaterialTheme.typography.bodyLarge.copy(color=MaterialTheme.colorScheme.onSurface),
-                    cursorBrush=SolidColor(MaterialTheme.colorScheme.primary),minLines=1,maxLines=5,
-                    modifier=Modifier.weight(1f).heightIn(min=Sizes.composerInputMin,max=Sizes.composerMax).padding(horizontal=Space.small,vertical=Space.micro).semantics {contentDescription="消息输入框"},
-                    decorationBox={field -> Box(contentAlignment=Alignment.CenterStart) {
-                        if(input.isEmpty()) Text("发消息…",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant);field()
-                    }})
-                SoftAction(if(busy) Glyph.Stop else Glyph.Send,if(busy) if(compareMode) "取消全部" else "停止当前操作" else sendLabel,
-                    if(busy) onStop else onSend,enabled=busy || canSend,primary=true)
-            }
-            if(options) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-                MeldwiseFilterChip(selected=option.selected,onClick={onOptions(false);onThinking()},enabled=!busy,label={Text(option.label)},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
-            }
-        }
-    }
-}
 @Composable internal fun PanelColumn(title: String, content: @Composable ColumnScope.()->Unit) {
     val pixels=androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height
     val height=with(androidx.compose.ui.platform.LocalDensity.current) {pixels.toDp()*Sizes.sheetFraction}

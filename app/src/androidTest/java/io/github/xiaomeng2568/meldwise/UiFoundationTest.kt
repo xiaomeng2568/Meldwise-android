@@ -43,7 +43,7 @@ class UiFoundationTest {
     }
     @Test fun plainAndCodeSurfacesPreserveTheirSource() {
         compose.setContent {MeldwiseTheme {ContentRenderer(ParsedContent(listOf(PlainTextBlock("  **raw**\n    next"),CodeBlock("# not heading","kotlin")),false))}}
-        compose.onNodeWithText("  **raw**\n    next").assertExists();compose.onNodeWithText("# not heading").assertExists();compose.onNodeWithText("kotlin").assertExists()
+        compose.onNodeWithText("  **raw**\n    next").assertExists();compose.onNodeWithText("# not heading").assertExists();compose.onNodeWithText("Kotlin").assertExists()
     }
     @Test fun unavailableReasoningIsAbsent() {
         compose.setContent {MeldwiseTheme {Column {ReasoningPanel(ReasoningSummary());ContentRenderer(ContentParser.parse("final answer"))}}}
@@ -87,7 +87,10 @@ class UiFoundationTest {
         compose.onNodeWithContentDescription("消息输入框").performTextInput((1..20).joinToString("\n") {"line $it"})
         compose.waitForIdle();compose.onNodeWithTag("composer").assertHeightIsAtLeast(48.dp)
         val density=compose.density.density
-        assertTrue(compose.onNodeWithTag("composer").fetchSemanticsNode().boundsInRoot.height/density<=140f)
+        // Expanded composer adds a separate 48dp controls row; the editable region retains its old cap.
+        assertTrue(compose.onNodeWithTag("composerInput").fetchSemanticsNode().boundsInRoot.height/density<=120f)
+        assertTrue(compose.onNodeWithTag("composer").fetchSemanticsNode().boundsInRoot.height/density<=168f)
+        compose.onNodeWithTag("composerControls").assertHeightIsAtLeast(48.dp)
     }
     @Test fun copyControlHasFullTouchTargetAndButtonSemantics() {
         compose.setContent {MeldwiseTheme {CopyAction("local fixture")}}

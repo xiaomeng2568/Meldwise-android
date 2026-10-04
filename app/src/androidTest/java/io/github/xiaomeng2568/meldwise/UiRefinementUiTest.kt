@@ -99,8 +99,8 @@ class UiRefinementUiTest {
         compose.onNodeWithText("模型设置").assertIsNotSelected();compose.onNodeWithText("思考").assertDoesNotExist()
     }
     @Test fun darkAccentDoesNotBypassOriginalCodeRenderer() {
-        compose.setContent {MeldwiseTheme(Appearance.Dark,0x336699) {AssistantOutput(CompareLane(ref,"A",LaneState.Completed,"```text\n  raw source\n```"))}}
-        compose.onNodeWithText("  raw source").assertExists();compose.onNodeWithText("text").assertExists()
+        compose.setContent {MeldwiseTheme(Appearance.Dark,0x336699) {AssistantOutput(CompareLane(ref,"A",LaneState.Completed,"```kotlin\n  raw source\n```"))}}
+        compose.onNodeWithText("  raw source\n").assertExists();compose.onNodeWithText("Kotlin").assertExists()
     }
     @Test fun errorDetailsRemainAccessibleThroughQuietActionMenu() {
         var details=0
