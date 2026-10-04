@@ -139,7 +139,7 @@ class CompareRepository(private val blob:AtomicBlob,private val box:AesGcmBox) {
 
 /** Exactly two child attempts. A lane catches its own failure; external cancellation joins both. */
 class CompareExecutor(private val registry:ProviderRegistry,private val repository:CompareRepository,
-    private val clock:()->Long={System.nanoTime()/1_000_000}) {
+    val usage:RuntimeUsage=RuntimeUsage(),private val clock:()->Long={System.nanoTime()/1_000_000}) {
     suspend fun execute(draft:CompareRun,onUpdate:(CompareRun)->Unit):CompareRun = supervisorScope {
         // Future stages are storage/presentation only. The MVP never schedules them implicitly.
         require(draft.outputs.size==2 && draft.stages==listOf(CompareStage("parallel",0,listOf("A","B"))) &&
@@ -148,6 +148,7 @@ class CompareExecutor(private val registry:ProviderRegistry,private val reposito
         require(listOf(draft.laneA,draft.laneB).all {it.state==CompareLaneState.Pending && ReasoningPolicy.supported(it.modelRef,it.preference)})
         var current=draft.copy(lifecycle=CompareRunState.Running)
         withContext(Dispatchers.IO) {repository.upsert(current)};onUpdate(current)
+        val accounting=usage.begin(UsageOperationId(UsageMode.COMPARE,draft.id))
         val mutex=Mutex();var lastSaved=clock()
         suspend fun update(id:String,force:Boolean=false,transform:(CompareLaneRecord)->CompareLaneRecord) {
             mutex.withLock {
@@ -176,8 +177,9 @@ class CompareExecutor(private val registry:ProviderRegistry,private val reposito
             try {
                 update(initial.laneId,true) {it.copy(state=CompareLaneState.Waiting)}
                 if(!registry.ready(initial.modelRef)) throw ProviderFailure(LlmError(ErrorKind.AUTHENTICATION))
-                registry.get(initial.modelRef.providerId).streamResponse(LlmRequest(initial.modelRef.modelId,
-                    listOf(LlmMessage(MessageRole.USER,draft.prompt)),reasoning=initial.preference,observeHttp=true)).collect {event ->
+                val provider=registry.get(initial.modelRef.providerId)
+                val request=LlmRequest(initial.modelRef.modelId,listOf(LlmMessage(MessageRole.USER,draft.prompt)),reasoning=initial.preference,observeHttp=true)
+                accounting.stream(UsageSlot.compare(initial.laneId),initial.modelRef) {provider.streamResponse(request)}.collect {event ->
                     update(initial.laneId,event is LlmEvent.Completed || event is LlmEvent.Failed || event is LlmEvent.Incomplete) {lane ->
                         // Terminal lanes are immutable, including when cancel-all arrives later.
                         if(!lane.state.active) return@update lane
@@ -216,7 +218,14 @@ class CompareExecutor(private val registry:ProviderRegistry,private val reposito
                 update(initial.laneId,true) {if(it.state.active) it.copy(state=CompareLaneState.Failed,
                     error=if(f is ProviderFailure) f.error.kind else ErrorKind.STORAGE,
                     reasoning=interrupted(it.reasoning)) else it}
-            } finally {withContext(NonCancellable) {timer.cancelAndJoin()}}
+            } finally {
+                withContext(NonCancellable) {timer.cancelAndJoin()}
+                val lane=if(initial.laneId=="A") current.laneA else current.laneB
+                accounting.finish(UsageSlot.compare(initial.laneId),when(lane.state) {
+                    CompareLaneState.Completed->RequestOutcome.COMPLETED;CompareLaneState.Failed->RequestOutcome.FAILED
+                    CompareLaneState.Cancelled->RequestOutcome.CANCELLED;else->RequestOutcome.INTERRUPTED
+                })
+            }
         }
         val a=async {attempt(draft.laneA)};val b=async {attempt(draft.laneB)}
         try {awaitAll(a,b)} finally {

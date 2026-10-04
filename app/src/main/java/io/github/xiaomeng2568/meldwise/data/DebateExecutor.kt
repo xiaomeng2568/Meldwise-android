@@ -21,7 +21,7 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
     private val inputBuilder:DebateInputBuilder=DebateInputBuilder(),
     private val monotonic:()->Long={System.nanoTime()/1_000_000},
     private val wallClock:()->Long=System::currentTimeMillis,
-    private val persistenceDispatcher:CoroutineDispatcher=Dispatchers.IO) {
+    private val persistenceDispatcher:CoroutineDispatcher=Dispatchers.IO,val usage:RuntimeUsage=RuntimeUsage()) {
     private class StageFinished:RuntimeException()
     private class StaleWrite:RuntimeException()
     private data class Result(val change:DebateStageChange?=null,val storage:Boolean=false)
@@ -36,6 +36,7 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
         ensureActive()
         val admitted=durable {repository.beginDebateExecution(plan,allowSharing)}
         val cid=admitted.conversationId;val rid=admitted.debateRounds.last().roundId
+        val accounting=usage.begin(UsageOperationId(UsageMode.DEBATE,rid,cid))
         val notifications=Mutex()
         suspend fun notifyUpdate(@Suppress("UNUSED_PARAMETER") c:Conversation) {
             // Concurrent writers must not deliver a stale whole-round observer snapshot out of order.
@@ -50,7 +51,7 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
                 val started=try {durable {repository.startDebateWave(cid,rid,types)}}
                     catch(_:Exception) {throw ProviderFailure(LlmError(ErrorKind.STORAGE))}
                 ensureActive();notifyUpdate(started)
-                runWave(cid,rid,types,::notifyUpdate)
+                runWave(cid,rid,types,accounting,::notifyUpdate)
             }
             repository.debateSnapshot(cid,rid)
         } catch(cancel:CancellationException) {
@@ -78,11 +79,11 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
         withContext(persistenceDispatcher) {block()}
     }
 
-    private suspend fun runWave(cid:String,rid:String,types:List<DebateStageType>,onUpdate:suspend (Conversation)->Unit)=coroutineScope {
+    private suspend fun runWave(cid:String,rid:String,types:List<DebateStageType>,accounting:UsageOperation,onUpdate:suspend (Conversation)->Unit)=coroutineScope {
         val results=ConcurrentHashMap<DebateStageType,Result>()
         val finished=Channel<DebateStageType>(Channel.UNLIMITED)
         val jobs=types.map {type ->launch {
-            val result=runStage(cid,rid,type,onUpdate)
+            val result=runStage(cid,rid,type,accounting,onUpdate)
             results[type]=result;finished.send(type)
         }}
         try {
@@ -107,11 +108,12 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
         }
     }
 
-    private suspend fun runStage(cid:String,rid:String,type:DebateStageType,onUpdate:suspend (Conversation)->Unit):Result=coroutineScope {
+    private suspend fun runStage(cid:String,rid:String,type:DebateStageType,accounting:UsageOperation,onUpdate:suspend (Conversation)->Unit):Result=coroutineScope {
         val round=repository.debateSnapshot(cid,rid).debateRounds.last()
         var saved=round.stage(type);var stage=saved
         val mutex=Mutex();var lastSaved=monotonic();var httpAt:Long?=null;var firstTextAt:Long?=null
         var result:Result?=null
+        var cancelled=false
         fun duration()=httpAt?.let {((firstTextAt ?: monotonic())-it).coerceIn(0,604800000).div(1000)}
         fun end(state:DebateStageState,error:ErrorKind?=null)=stage.copy(state=state,error=error,
             endedAt=maxOf(wallClock(),stage.startedAt ?: 0),processingDuration=duration(),
@@ -135,8 +137,9 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
             ensureActive()
             val input=inputBuilder.build(round,type)
             ready(stage.model.ref);ensureActive()
-            registry.get(stage.model.ref.providerId).streamResponse(LlmRequest(stage.model.ref.modelId,input,
-                reasoning=stage.model.preference,observeHttp=true)).collect {event ->
+            val provider=registry.get(stage.model.ref.providerId)
+            val request=LlmRequest(stage.model.ref.modelId,input,reasoning=stage.model.preference,observeHttp=true)
+            accounting.stream(UsageSlot.debate(type),stage.model.ref,stage.stageId) {provider.streamResponse(request)}.collect {event ->
                 ensureActive()
                 mutex.withLock {
                     if(result!=null) throw StageFinished()
@@ -177,6 +180,7 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
             mutex.withLock {if(result==null) result=Result(DebateStageChange(saved,end(DebateStageState.Interrupted,ErrorKind.STREAM_INTERRUPTED)))}
         } catch(_:StageFinished) { /* First validated terminal stops collection, including buffered late events. */ }
         catch(c:CancellationException) {
+            cancelled=true
             // Only flush local visible partials. Terminal cancellation belongs to the joined wave coordinator.
             withContext(NonCancellable) {mutex.withLock {
                 if(result==null && stage.state==DebateStageState.Running) try {
@@ -190,6 +194,14 @@ internal class DebateExecutor(private val registry:ProviderRegistry,private val 
             mutex.withLock {result=Result(DebateStageChange(saved,end(
                 if(f is ProviderFailure && f.error.kind==ErrorKind.STREAM_INTERRUPTED) DebateStageState.Interrupted else DebateStageState.Failed,
                 if(f is ProviderFailure) f.error.kind else ErrorKind.UNKNOWN)),storage=f is ProviderFailure && f.error.kind==ErrorKind.STORAGE)}
+        } finally {
+            val terminal=result?.change?.next?.state ?: stage.state
+            accounting.finish(UsageSlot.debate(type),when {
+                terminal==DebateStageState.Complete->RequestOutcome.COMPLETED
+                terminal==DebateStageState.Failed->RequestOutcome.FAILED
+                terminal==DebateStageState.Cancelled || cancelled->RequestOutcome.CANCELLED
+                else->RequestOutcome.INTERRUPTED
+            })
         }
         requireNotNull(result)
     }

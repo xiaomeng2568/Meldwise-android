@@ -92,7 +92,8 @@ internal fun restoreCollaborate(round:CollaborateRound):CollaborateRound {
  */
 class CollaborateExecutor(private val registry:ProviderRegistry,private val repository:ChatRepository,
     private val contextBuilder:ConversationContextBuilder=ConversationContextBuilder(),
-    private val monotonic:()->Long={System.nanoTime()/1_000_000},private val wallClock:()->Long=System::currentTimeMillis) {
+    private val monotonic:()->Long={System.nanoTime()/1_000_000},private val wallClock:()->Long=System::currentTimeMillis,
+    val usage:RuntimeUsage=RuntimeUsage()) {
     private class StageFinished:RuntimeException()
     suspend fun execute(plan:PreparedCollaborate,allowSharing:Boolean=false,onUpdate:(Conversation)->Unit={}):Conversation = coroutineScope {
         currentCoroutineContext().ensureActive()
@@ -100,6 +101,7 @@ class CollaborateExecutor(private val registry:ProviderRegistry,private val repo
         // The outer same-dispatcher NonCancellable block avoids losing the newly persisted round ID on return from IO.
         var conversation=withContext(NonCancellable) {withContext(Dispatchers.IO) {repository.beginCollaborate(plan,allowSharing)}}
         val roundId=conversation.rounds.last().roundId
+        val accounting=usage.begin(UsageOperationId(UsageMode.COLLABORATE,roundId,conversation.conversationId))
         try {
             onUpdate(conversation)
             for(index in 0..2) {
@@ -143,8 +145,9 @@ class CollaborateExecutor(private val registry:ProviderRegistry,private val repo
                 try {
                     if(!registry.ready(stage.model.ref)) throw ProviderFailure(LlmError(ErrorKind.AUTHENTICATION))
                     val input=contextBuilder.collaborateStageInput(round,index)
-                    registry.get(stage.model.ref.providerId).streamResponse(LlmRequest(stage.model.ref.modelId,input,
-                        reasoning=stage.model.preference,observeHttp=true)).collect {event ->
+                    val provider=registry.get(stage.model.ref.providerId)
+                    val request=LlmRequest(stage.model.ref.modelId,input,reasoning=stage.model.preference,observeHttp=true)
+                    accounting.stream(UsageSlot.collaborate(stage.type),stage.model.ref,stage.stageId) {provider.streamResponse(request)}.collect {event ->
                         val terminal=event is LlmEvent.Completed || event is LlmEvent.Incomplete || event is LlmEvent.Failed || event==LlmEvent.Cancelled
                         update(terminal) {s ->when(event) {
                             LlmEvent.HttpReady->{if(httpAt==null) httpAt=monotonic();s}
@@ -178,7 +181,13 @@ class CollaborateExecutor(private val registry:ProviderRegistry,private val repo
                 } catch(f:Exception) {
                     update(true) {it.copy(state=CollaborateStageState.Failed,error=if(f is ProviderFailure) f.error.kind else ErrorKind.UNKNOWN,
                         endedAt=wallClock(),reasoning=interruptReasoning(it.reasoning))}
-                } finally {withContext(NonCancellable) {ticker.cancelAndJoin()}}
+                } finally {
+                    withContext(NonCancellable) {ticker.cancelAndJoin()}
+                    accounting.finish(UsageSlot.collaborate(stage.type),when(stage.state) {
+                        CollaborateStageState.Complete->RequestOutcome.COMPLETED;CollaborateStageState.Failed->RequestOutcome.FAILED
+                        CollaborateStageState.Cancelled->RequestOutcome.CANCELLED;else->RequestOutcome.INTERRUPTED
+                    })
+                }
             }
         } catch(cancel:CancellationException) {
             withContext(NonCancellable) {conversation=withContext(Dispatchers.IO) {repository.cancelCollaborateRound(roundId)};onUpdate(conversation)}

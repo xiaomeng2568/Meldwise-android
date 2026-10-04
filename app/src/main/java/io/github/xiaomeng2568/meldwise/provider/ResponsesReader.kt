@@ -24,6 +24,19 @@ class ResponsesReader(private val trace:InferenceTrace=InferenceTrace(),
     }
     private fun string(obj:JsonObject,name:String):String? =
         (obj[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    /** Same terminal usage extraction path for both providers. Bad optional metadata is not answer failure. */
+    private fun usage(value:JsonElement?):Usage? {
+        val obj=value as? JsonObject ?: return null
+        val values=listOf("input_tokens","output_tokens","total_tokens").map {key ->
+            val field=obj[key]
+            if(field==null || field==JsonNull) null else {
+                val primitive=field as? JsonPrimitive ?: return null
+                if(primitive.isString) return null
+                primitive.longOrNull ?: return null
+            }
+        }
+        return UsageNormalization.normalize(Usage(values[0],values[1],values[2]))
+    }
     private fun append(key:Pair<Int,Int>,value:String,itemId:String?):List<LlmEvent> {
         check(key.first in assistants && key.first in 0..1024 && key.second in 0..1024,
             InferenceProtocol.ASSISTANT_ITEM_REQUIRED,InferenceStage.ASSISTANT_ASSOCIATION)
@@ -114,8 +127,7 @@ class ResponsesReader(private val trace:InferenceTrace=InferenceTrace(),
                     }
                 }
                 check(produced,InferenceProtocol.ASSISTANT_OUTPUT_TEXT_NOT_DETECTED,InferenceStage.TERMINAL_VALIDATION)
-                val usage=response["usage"]?.takeIf { it is JsonObject }?.jsonObject?.let {
-                    Usage(it["input_tokens"]?.jsonPrimitive?.longOrNull,it["output_tokens"]?.jsonPrimitive?.longOrNull,it["total_tokens"]?.jsonPrimitive?.longOrNull) }
+                val usage=usage(response["usage"])
                 terminal=true; trace.finish(success=true)
                 events+LlmEvent.Completed(usage)
             }
