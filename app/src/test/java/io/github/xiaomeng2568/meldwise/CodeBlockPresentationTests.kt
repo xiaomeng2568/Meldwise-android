@@ -55,6 +55,8 @@ class CodeBlockPresentationTests {
     @Test fun tripleQuotedSourceIsOneString() { val raw = "\"\"\"if\nreturn\"\"\""; assertEquals(listOf(raw to CodeTokenRole.StringLiteral), tokenTexts(raw, "python")) }
     @Test fun unterminatedStringTailStaysPlain() { val raw = "val s=\"if return 1"; assertEquals(listOf("val" to CodeTokenRole.Keyword), tokenTexts(raw, "kotlin")) }
     @Test fun unterminatedBlockCommentTailStaysPlain() { assertTrue(CodeHighlighter.tokens("/* if return 1", "java").isEmpty()) }
+    @Test fun uncertainNestedCommentRemainderStaysPlain() { assertTrue(CodeHighlighter.tokens("/* outer /* inner */ return 1 */", "kotlin").isEmpty()) }
+    @Test fun shellWordHashIsNotGuessedAsComment() { assertTrue(CodeHighlighter.tokens("echo foo#return", "shell").isEmpty()); assertEquals(CodeTokenRole.Comment, tokenTexts("echo foo # comment", "shell").single().second) }
     @Test fun unknownLanguagesRemainPlain() { listOf("rust", "html", "css", "xml", "markdown", "bad lang").forEach { assertTrue(CodeHighlighter.tokens("return \"x\" # 1", it).isEmpty()) } }
     @Test fun jsonDoesNotGuessSingleQuotedString() { assertTrue(CodeHighlighter.tokens("'true'", "json").isEmpty()); assertTrue(tokenTexts("{\"x\":true}", "json").contains("true" to CodeTokenRole.Keyword)) }
     @Test fun identifiersAreNotSubstringKeywords() { assertTrue(CodeHighlighter.tokens("returnValue className iffy variable123", "kotlin").isEmpty()) }

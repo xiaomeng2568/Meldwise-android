@@ -77,14 +77,14 @@ internal object CodeHighlighter {
         fun add(end: Int, role: CodeTokenRole) { result.add(CodeToken(i, end, role)); i = end }
         while (i < source.length && result.size < CodePresentation.maxTokens) {
             val c = source[i]
-            if ((hashComment && c == '#') || (cLike && source.startsWith("//", i)) ||
+            if ((hashComment && c == '#' && (language == "python" || i == 0 || source[i - 1].isWhitespace())) || (cLike && source.startsWith("//", i)) ||
                 (language == "sql" && source.startsWith("--", i))) {
                 add(source.indexOf('\n', i).let { if (it < 0) source.length else it }, CodeTokenRole.Comment)
             } else if ((cLike || language == "sql") && source.startsWith("/*", i)) {
                 val end = source.indexOf("*/", i + 2)
                 if (end < 0) break // An incomplete stream stays ordinary source.
                 // Nested block comments are deliberately not guessed.
-                if (source.indexOf("/*", i + 2).let { it in (i + 2) until end }) { i = end + 2; continue }
+                if (source.indexOf("/*", i + 2).let { it in (i + 2) until end }) break
                 add(end + 2, CodeTokenRole.Comment)
             } else if (c == '"' || c == '\'' || (c == '`' && language in setOf("javascript", "typescript"))) {
                 if (language == "json" && c != '"') break
