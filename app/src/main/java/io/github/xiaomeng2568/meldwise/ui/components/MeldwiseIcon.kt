@@ -18,12 +18,12 @@ import io.github.xiaomeng2568.meldwise.ui.theme.Sizes
 
 enum class Glyph { Menu, Plus, Chevron, Forward, Send, Stop, Copy, Back, More, Close, Check, Chat, Compare, Collaborate, Debate }
 /** Original geometric icons. Accessibility labels belong to their interactive parent. */
-@Composable fun MeldwiseIcon(glyph: Glyph, modifier: Modifier = Modifier) {
+@Composable fun MeldwiseIcon(glyph: Glyph, modifier: Modifier = Modifier, opticalSize:androidx.compose.ui.unit.Dp=Sizes.icon) {
     val vector=when(glyph) {Glyph.Chat->ModeIcons.chat;Glyph.Compare->ModeIcons.compare
         Glyph.Collaborate->ModeIcons.collaborate;Glyph.Debate->ModeIcons.debate;else->null}
-    if(vector!=null) {Icon(vector,contentDescription=null,modifier=modifier.size(Sizes.icon));return}
+    if(vector!=null) {Icon(vector,contentDescription=null,modifier=modifier.size(opticalSize));return}
     val color = androidx.compose.material3.LocalContentColor.current
-    Canvas(modifier.size(Sizes.icon)) {
+    Canvas(modifier.size(opticalSize)) {
         scale(size.width / 24f, size.height / 24f, pivot = Offset.Zero) {
             fun line(x: Float, y: Float, a: Float, b: Float) = drawLine(color, Offset(x,y), Offset(a,b), 1.8f, StrokeCap.Round)
             when(glyph) {

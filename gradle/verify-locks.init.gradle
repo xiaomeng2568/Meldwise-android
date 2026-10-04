@@ -4,6 +4,16 @@ import org.gradle.api.artifacts.result.UnresolvedDependencyResult
 allprojects {
     afterEvaluate {
         if (path == ':app') {
+            tasks.register('verifyKotlinLocks') {
+                doLast {
+                    def compilerGraphs = configurations.findAll { it.canBeResolved && it.name.startsWith('kotlin') }
+                    compilerGraphs.each { configuration ->
+                        configuration.resolve()
+                        println('KOTLIN_LOCK_OK ' + configuration.name)
+                    }
+                    if (compilerGraphs.empty) throw new GradleException('NO_KOTLIN_LOCK_GRAPHS')
+                }
+            }
             tasks.register('verifyFoundationLocks') {
                 doLast {
                     def names = ['debugCompileClasspath','debugRuntimeClasspath','releaseCompileClasspath','releaseRuntimeClasspath',

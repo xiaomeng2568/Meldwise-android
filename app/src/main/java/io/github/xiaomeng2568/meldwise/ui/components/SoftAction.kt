@@ -13,7 +13,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
 
 /** One geometry for message/block/menu controls; full 48dp hit area, soft 40dp visual. */
 @Composable fun SoftAction(glyph:Glyph,label:String,onClick:()->Unit,enabled:Boolean=true,tonal:Boolean=true,primary:Boolean=false) {
-    Surface(onClick=onClick,enabled=enabled,shape=CircleShape,color=Color.Transparent,
+    MeldwiseSurface(onClick=onClick,enabled=enabled,shape=CircleShape,color=Color.Transparent,
         modifier=Modifier.size(Sizes.touch).semantics {contentDescription=label;role=Role.Button}) {
         Box(contentAlignment=Alignment.Center) {
             val colors=MaterialTheme.colorScheme

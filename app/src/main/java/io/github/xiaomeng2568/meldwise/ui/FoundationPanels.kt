@@ -30,7 +30,7 @@ fun preferenceLabel(p:ReasoningPreference)=when(p) {ReasoningPreference.Off->"�
     } else {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(Space.micro)) {
             listOf(ReasoningPreference.Off,ReasoningPreference.Low,ReasoningPreference.High,ReasoningPreference.Max).forEach {p ->
-                Surface(onClick={onSelect(p)},enabled=enabled,shape=CircleShape,color=Color.Transparent,
+                MeldwiseSurface(onClick={onSelect(p)},enabled=enabled,shape=CircleShape,color=Color.Transparent,
                     modifier=Modifier.heightIn(min=Sizes.touch).semantics {this.selected=selected==p}) {
                     Box(Modifier.padding(vertical=Space.small).background(if(selected==p) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,CircleShape)
                         .padding(horizontal=Space.medium,vertical=Space.micro),contentAlignment=androidx.compose.ui.Alignment.Center) {
@@ -53,7 +53,7 @@ fun preferenceLabel(p:ReasoningPreference)=when(p) {ReasoningPreference.Off->"�
     Text("重点色",style=MaterialTheme.typography.titleMedium)
     Row(horizontalArrangement=Arrangement.spacedBy(Space.micro)) {
         presets.forEachIndexed {index,value ->
-            Surface(onClick={onAccent(value)},shape=CircleShape,color=Color.Transparent,modifier=Modifier.size(Sizes.touch).semantics {
+            MeldwiseSurface(onClick={onAccent(value)},shape=CircleShape,color=Color.Transparent,modifier=Modifier.size(Sizes.touch).semantics {
                 contentDescription=listOf("紫色","蓝色","绿色","暖棕","玫瑰色")[index]+"重点色"
                 selected=accent==value
             }) {
@@ -64,8 +64,8 @@ fun preferenceLabel(p:ReasoningPreference)=when(p) {ReasoningPreference.Off->"�
     OutlinedTextField(hex,{if(it.length<=7) hex=it},label={Text("自定义色号")},prefix={Text("#")},singleLine=true,
         shape=Radius.medium,modifier=Modifier.fillMaxWidth())
     Row {
-        TextButton(enabled=parseAccent(hex)!=null,onClick={onAccent(parseAccent(hex))}) {Text("应用")}
-        TextButton(onClick={onAccent(null)}) {Text("恢复默认")}
+        MeldwiseTextButton(enabled=parseAccent(hex)!=null,onClick={onAccent(parseAccent(hex))}) {Text("应用")}
+        MeldwiseTextButton(onClick={onAccent(null)}) {Text("恢复默认")}
     }
     Text("文字和按钮会自动调整深浅，保持清楚。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }

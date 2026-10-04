@@ -9,6 +9,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 
 @Serializable enum class CollaborateStageType { INITIAL, REVIEW, SYNTHESIS }
+/** Meldwise's review instruction policy, independent from provider reasoning effort. */
+@Serializable enum class ReviewIntensity { CONCISE, STANDARD, STRICT }
+@Serializable enum class SynthesisRole { PRIMARY, REVIEWER }
 @Serializable enum class CollaborateStageState { Pending, Running, Complete, Failed, Cancelled, Interrupted, NotRun }
 @Serializable enum class CollaborateRoundState { Pending, Running, Complete, Failed, Cancelled, Interrupted;
     val active get()=this==Pending || this==Running
@@ -16,9 +19,15 @@ import kotlinx.serialization.Serializable
 @Serializable data class CollaborateModel(val ref:ModelRef,val displayName:String?=null,
     val preference:ReasoningPreference=ReasoningPreference.Auto,
     val providerDisplayName:String=when(ref.providerId) {ProviderIds.CHATGPT->"ChatGPT";ProviderIds.DEEPSEEK->"DeepSeek";else->"未知提供方"})
-@Serializable data class CollaborateConfig(val primary:CollaborateModel,val reviewer:CollaborateModel) {
+@Serializable data class CollaborateConfig(val primary:CollaborateModel,val reviewer:CollaborateModel,
+    val reviewIntensity:ReviewIntensity=ReviewIntensity.STANDARD,val synthesisRole:SynthesisRole=SynthesisRole.PRIMARY) {
     val providers get()=setOf(primary.ref.providerId,reviewer.ref.providerId)
     val providerSetKey get()=providers.sorted().joinToString("|")
+    fun modelFor(type:CollaborateStageType)=when(type) {
+        CollaborateStageType.INITIAL->primary
+        CollaborateStageType.REVIEW->reviewer
+        CollaborateStageType.SYNTHESIS->if(synthesisRole==SynthesisRole.PRIMARY) primary else reviewer
+    }
 }
 @Serializable data class FrozenVisibleInput(val role:MessageRole,val text:String) {
     override fun toString()="FrozenVisibleInput([REDACTED])"
@@ -31,8 +40,10 @@ import kotlinx.serialization.Serializable
 }
 @Serializable data class CollaborateRound(val roundId:String,val userMessageId:String,val stages:List<CollaborateStage>,
     val frozenInput:List<FrozenVisibleInput>,val inputRevision:Long,val createdAt:Long,val updatedAt:Long,
-    val lifecycle:CollaborateRoundState=CollaborateRoundState.Running,val retryOf:String?=null) {
-    val config get()=CollaborateConfig(stages.first().model,stages[1].model)
+    val lifecycle:CollaborateRoundState=CollaborateRoundState.Running,val retryOf:String?=null,
+    val reviewIntensity:ReviewIntensity=ReviewIntensity.STANDARD,val synthesisRole:SynthesisRole=SynthesisRole.PRIMARY) {
+    // Additive schema-3 defaults preserve the original A -> B -> A strategy of old rounds.
+    val config get()=CollaborateConfig(stages.first().model,stages[1].model,reviewIntensity,synthesisRole)
     override fun toString()="CollaborateRound(lifecycle=$lifecycle, content=[REDACTED])"
 }
 class PreparedCollaborate internal constructor(val conversationId:String,val previousId:String?,val text:String,

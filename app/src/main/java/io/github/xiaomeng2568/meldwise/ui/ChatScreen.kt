@@ -16,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import io.github.xiaomeng2568.meldwise.auth.AuthState
 import io.github.xiaomeng2568.meldwise.provider.*
@@ -37,9 +36,14 @@ class ChatActions(val chooseProvider: (String)->Unit, val selectModel: (ModelRef
     val openSingle:(String)->Unit={},val openCompare:(String)->Unit={},val newCompare:()->Unit={},
     val deleteHistory:(String,Boolean)->Unit={_,_->},val moveHistory:(String,Boolean,Int)->Unit={_,_,_->},
     val dismissNotice:(Long)->Unit={},val newCollaborate:()->Unit={},
-    val configureCollaborate:(CompareSubmission)->Unit={},val retryCollaborate:(String)->Unit={})
+    val configureCollaborate:(CollaborateSubmission)->Unit={},val retryCollaborate:(String)->Unit={},
+    val refreshModels:(String)->Unit={})
 class CompareSubmission(val prompt:String,val a:ModelRef,val b:ModelRef,val pa:ReasoningPreference,val pb:ReasoningPreference) {
     override fun toString()="CompareSubmission([REDACTED])"
+}
+class CollaborateSubmission(val a:ModelRef,val b:ModelRef,val pa:ReasoningPreference,val pb:ReasoningPreference,
+    val reviewIntensity:ReviewIntensity=ReviewIntensity.STANDARD,val synthesisRole:SynthesisRole=SynthesisRole.PRIMARY) {
+    override fun toString()="CollaborateSubmission([REDACTED])"
 }
 private typealias Panel = ChatPanel
 
@@ -74,6 +78,8 @@ private typealias Panel = ChatPanel
     var modelB by remember {mutableStateOf<ModelRef?>(null)}
     var effortA by remember {mutableStateOf(ReasoningPreference.Auto)}
     var effortB by remember {mutableStateOf(ReasoningPreference.Auto)}
+    var reviewIntensity by remember {mutableStateOf(ReviewIntensity.STANDARD)}
+    var synthesisRole by remember {mutableStateOf(SynthesisRole.PRIMARY)}
     val chatgpt=screen.providerId==ProviderIds.CHATGPT
     val ready=if(chatgpt) auth is AuthState.Connected && auth.planEnabled else screen.ready
     val current=screen.selected ?: screen.historyRef
@@ -81,8 +87,9 @@ private typealias Panel = ChatPanel
     fun label(ref:ModelRef)=modelLabel(ref,foundation.catalogs[ref.providerId]?.firstOrNull {it.id==ref.modelId}?.displayName ?: ref.modelId)
     fun available(ref:ModelRef?)=ref!=null && foundation.catalogs[ref.providerId]?.any {it.id==ref.modelId}==true &&
         if(ref.providerId==ProviderIds.CHATGPT) auth is AuthState.Connected && auth.planEnabled else apiState==ApiKeyState.CONFIGURED
-    fun applyCollaborate(a:ModelRef?=modelA,b:ModelRef?=modelB,pa:ReasoningPreference=effortA,pb:ReasoningPreference=effortB) {
-        if(collaborateMode && a!=null && b!=null && a!=b) actions.configureCollaborate(CompareSubmission("",a,b,pa,pb))
+    fun applyCollaborate(a:ModelRef?=modelA,b:ModelRef?=modelB,pa:ReasoningPreference=effortA,pb:ReasoningPreference=effortB,
+        review:ReviewIntensity=reviewIntensity,synthesis:SynthesisRole=synthesisRole) {
+        if(collaborateMode && a!=null && b!=null && a!=b) actions.configureCollaborate(CollaborateSubmission(a,b,pa,pb,review,synthesis))
     }
     val list=rememberLazyListState()
     val compareList=rememberLazyListState()
@@ -97,7 +104,8 @@ private typealias Panel = ChatPanel
     LaunchedEffect(foundation.mode,foundation.conversation?.conversationId,foundation.collaborate) {
         if(foundation.mode==ConversationMode.Collaborate) {
             navigation=navigation.copy(compareMode=false)
-            foundation.collaborate?.let {config ->modelA=config.primary.ref;modelB=config.reviewer.ref;effortA=config.primary.preference;effortB=config.reviewer.preference}
+            foundation.collaborate?.let {config ->modelA=config.primary.ref;modelB=config.reviewer.ref;effortA=config.primary.preference;effortB=config.reviewer.preference
+                reviewIntensity=config.reviewIntensity;synthesisRole=config.synthesisRole}
         }
     }
     var followLatest by remember {mutableStateOf(true)}
@@ -132,14 +140,9 @@ private typealias Panel = ChatPanel
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.widthIn(max=Sizes.contentMax).fillMaxWidth().padding(horizontal=Space.small),verticalAlignment=Alignment.CenterVertically) {
                 SoftAction(Glyph.Menu,"打开菜单",{navigation=navigation.open(Panel.Settings)},tonal=false)
-                TextButton(onClick={pickingLane=null;navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Models)},modifier=Modifier.weight(1f).heightIn(min=Sizes.touch)) {
-                    Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                        Text(if(compareMode) "对比" else if(collaborateMode) "协作" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.titleMedium)
-                        Text(if(compareMode || collaborateMode) listOfNotNull(modelA,modelB).joinToString(if(collaborateMode) " → " else " × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
-                            maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    MeldwiseIcon(Glyph.Chevron)
-                }
+                ModelTitle(if(compareMode) "对比" else if(collaborateMode) "协作" else if(current.modelId=="UNKNOWN") "Meldwise" else modelLabel(current,name),
+                    if(compareMode || collaborateMode) listOfNotNull(modelA,modelB).joinToString(if(collaborateMode) " → " else " × ") {label(it)}.ifEmpty {"选两个模型"} else if(screen.selected==null) "选择模型" else "单模型对话",
+                    Modifier.weight(1f),onClick={pickingLane=null;navigation=navigation.open(if(compareMode) Panel.CompareSetup else if(collaborateMode) Panel.CollaborateSetup else Panel.Models)})
                 SoftAction(Glyph.Plus,"选择对话模式",{navigation=navigation.open(Panel.Modes)},enabled=!screen.busy,tonal=false)
             }
             if(compareMode) {
@@ -147,7 +150,7 @@ private typealias Panel = ChatPanel
                     contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.wide)) {
                     if(compareItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large)) {
                         Text("把同一个问题交给两个模型。",style=MaterialTheme.typography.titleMedium)
-                        TextButton(onClick={navigation=navigation.open(Panel.CompareSetup)}) {Text("选择模型")}
+                        MeldwiseTextButton(onClick={navigation=navigation.open(Panel.CompareSetup)}) {Text("选择模型")}
                     }}
                     items(compareItems,key={it.key}) {CompareMessage(it)}
                 }
@@ -156,11 +159,11 @@ private typealias Panel = ChatPanel
                     contentPadding=PaddingValues(horizontal=Space.content,vertical=Space.wide),verticalArrangement=Arrangement.spacedBy(Space.large)) {
                     if(collaborateItems.isEmpty()) item {Column(Modifier.padding(vertical=Space.large)) {
                         Text("先回答，再审阅，最后整理。",style=MaterialTheme.typography.titleMedium)
-                        TextButton(onClick={navigation=navigation.open(Panel.CollaborateSetup)}) {Text("选择协作模型")}
+                        MeldwiseTextButton(onClick={navigation=navigation.open(Panel.CollaborateSetup)}) {Text("选择协作模型")}
                     }}
                     items(collaborateItems,key={it.key}) {CollaborateMessage(it)}
                     foundation.conversation?.rounds?.lastOrNull()?.takeIf {!it.lifecycle.active && it.lifecycle!=CollaborateRoundState.Complete}?.let {round ->
-                        item {TextButton(enabled=!screen.busy,onClick={actions.retryCollaborate(round.roundId)}) {Text("按原模型重新执行这一轮")}}
+                        item {MeldwiseTextButton(enabled=!screen.busy,onClick={actions.retryCollaborate(round.roundId)}) {Text("按原模型重新执行这一轮")}}
                     }
                 }
             } else if(screen.messages.isEmpty()) {
@@ -182,11 +185,11 @@ private typealias Panel = ChatPanel
                     Surface(shape=Radius.surface,color=MaterialTheme.colorScheme.surfaceContainerLow) {
                         Row(Modifier.fillMaxWidth().padding(start=Space.content),verticalAlignment=Alignment.CenterVertically) {
                             Text(errorLabel(it),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
-                            TextButton(onClick={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)}) {Text("详情")}
+                            MeldwiseTextButton(onClick={noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)}) {Text("详情")}
                         }
                     }
                 }
-                if(!compareMode && !collaborateMode && !ready && !screen.busy) TextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
+                if(!compareMode && !collaborateMode && !ready && !screen.busy) MeldwiseTextButton(onClick={navigation=navigation.open(Panel.Providers)},modifier=Modifier.fillMaxWidth()) {
                     Text(if(chatgpt) "连接 ChatGPT 后开始聊天" else "配置 DeepSeek 密钥后开始聊天")
                 }
                 Composer(input,{if(it.length<=32768) input=it},screen.busy,
@@ -219,6 +222,8 @@ private typealias Panel = ChatPanel
                     val lane=frame.modelLane
                     ModelPicker(screen,ready,actions,onSettings={navigation=navigation.open(Panel.Providers)},onSelected={},
                     catalogs=foundation.catalogs,loading=foundation.catalogStatus.loading,
+                    scope=if(lane==null) PickerScope.Single else PickerScope.Lane,
+                    readyForProvider={id ->if(id==ProviderIds.CHATGPT) auth is AuthState.Connected && auth.planEnabled else apiState==ApiKeyState.CONFIGURED},
                     selection=if(lane=="A") modelA else if(lane=="B") modelB else screen.selected,
                     preference=if(lane=="A") effortA else if(lane=="B") effortB else foundation.thinking,
                     onThinking={p ->if(lane=="A") {effortA=p;applyCollaborate(pa=p)} else if(lane=="B") {effortB=p;applyCollaborate(pb=p)} else actions.thinking(p)},onPick={ref ->
@@ -230,7 +235,7 @@ private typealias Panel = ChatPanel
                 Panel.CompareSetup,Panel.CollaborateSetup -> PanelColumn(if(activePanel==Panel.CollaborateSetup) "协作" else "对比") {
                     listOf("A" to modelA,"B" to modelB).forEach {(id,ref) ->
                             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
-                                TextButton(enabled=!screen.busy,onClick={pickingLane=id;navigation=navigation.open(Panel.Models)}) {
+                                MeldwiseTextButton(enabled=!screen.busy,onClick={pickingLane=id;navigation=navigation.open(Panel.Models)}) {
                                     Text("${if(activePanel==Panel.CollaborateSetup) if(id=="A") "主模型 A" else "审阅模型 B" else "模型 $id"}：${ref?.let {modelLabel(it,foundation.catalogs[it.providerId]?.firstOrNull {m ->m.id==it.modelId}?.displayName ?: it.modelId)} ?: "请选择"}")
                                 }
                                 ref?.let {ThinkingChoices(it,if(id=="A") effortA else effortB,enabled=!screen.busy) {p ->if(id=="A") {effortA=p;applyCollaborate(pa=p)} else {effortB=p;applyCollaborate(pb=p)}}
@@ -238,7 +243,20 @@ private typealias Panel = ChatPanel
                             }
                     }
                     if(modelA!=null && modelA==modelB) Text("选两个不同的模型。",color=MaterialTheme.colorScheme.error)
-                    if(activePanel==Panel.CollaborateSetup) Text("A 初答 → B 审阅 → A 综合",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(activePanel==Panel.CollaborateSetup) {
+                        Text("审阅强度",style=MaterialTheme.typography.labelLarge)
+                        Text("只调整审阅要求，不改变模型的思考强度。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
+                            ReviewIntensity.entries.forEach {value ->MeldwiseFilterChip(value==reviewIntensity,{reviewIntensity=value;applyCollaborate(review=value)},
+                                {Text(when(value) {ReviewIntensity.CONCISE->"简洁";ReviewIntensity.STANDARD->"标准";ReviewIntensity.STRICT->"严格"})},enabled=!screen.busy)}
+                        }
+                        Text("谁来综合",style=MaterialTheme.typography.labelLarge)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
+                            SynthesisRole.entries.forEach {value ->MeldwiseFilterChip(value==synthesisRole,{synthesisRole=value;applyCollaborate(synthesis=value)},
+                                {Text(if(value==SynthesisRole.PRIMARY) "主模型 A" else "审阅模型 B")},enabled=!screen.busy)}
+                        }
+                        Text("A 初答 → B 审阅 → ${if(synthesisRole==SynthesisRole.PRIMARY) "A" else "B"} 综合",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 Panel.Thinking -> PanelColumn("思考") {ThinkingChoices(current,foundation.thinking,enabled=!screen.busy,actions.thinking)}
                 Panel.History,Panel.HistoryChat,Panel.HistoryCompare,Panel.HistoryCollaborate -> HistoryPanel(frame.historyCategory,
@@ -256,7 +274,7 @@ private typealias Panel = ChatPanel
                 Panel.Diagnostics -> if(noticeDetails==null) DiagnosticsPanel(screen,inference) else CatalogDetails(requireNotNull(noticeDetails))
                 Panel.Appearance -> PanelColumn("外观") {
                     Appearance.entries.forEach {item ->
-                        TextButton(onClick={onAppearance(item)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch)) {
+                        MeldwiseTextButton(onClick={onAppearance(item)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch)) {
                             Text(when(item) {Appearance.System->"跟随系统";Appearance.Light->"浅色";Appearance.Dark->"深色"},Modifier.weight(1f))
                             if(item==appearance) MeldwiseIcon(Glyph.Check)
                         }
@@ -270,13 +288,13 @@ private typealias Panel = ChatPanel
                     SettingsRow("外观","主题与重点色",{navigation=navigation.open(Panel.Appearance)})
                     SettingsRow("诊断","只含脱敏状态",{noticeDetails=null;navigation=navigation.open(Panel.Diagnostics)})
                     SettingsRow("组件预览","开发者选项",{navigation=navigation.open(Panel.Gallery)})
-                    if(chatgpt) TextButton(enabled=!screen.busy,onClick={actions.showLegacy();navigation=navigation.dismiss()}) {Text("查看旧版 ChatGPT 记录")}
+                    if(chatgpt) MeldwiseTextButton(enabled=!screen.busy,onClick={actions.showLegacy();navigation=navigation.dismiss()}) {Text("查看旧版 ChatGPT 记录")}
                     Text("Meldwise · ${androidx.compose.ui.res.stringResource(io.github.xiaomeng2568.meldwise.R.string.public_alpha_version)}\n非官方客户端 · SIWC 兼容性：有条件通过",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Panel.Modes -> ModePicker(enabled=!screen.busy,selected=if(compareMode) HistoryCategory.Compare else if(collaborateMode) HistoryCategory.Collaborate else HistoryCategory.Chat,
                     onSingle={input="";actions.newChat();navigation=navigation.selectMode(false)},
                     onCompare={input="";actions.newCompare();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;navigation=navigation.selectMode(true)},
-                    onCollaborate={input="";actions.newCollaborate();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;navigation=navigation.dismiss().copy(compareMode=false).open(Panel.CollaborateSetup)})
+                    onCollaborate={input="";actions.newCollaborate();modelA=screen.selected;modelB=null;effortA=foundation.thinking;effortB=ReasoningPreference.Off;reviewIntensity=ReviewIntensity.STANDARD;synthesisRole=SynthesisRole.PRIMARY;navigation=navigation.dismiss().copy(compareMode=false).open(Panel.CollaborateSetup)})
                 Panel.None -> Unit
             }
             }
@@ -305,8 +323,8 @@ private typealias Panel = ChatPanel
                     if(busy) onStop else onSend,enabled=busy || canSend,primary=true)
             }
             if(options) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
-                FilterChip(selected=thinking,onClick={onOptions(false);onThinking()},enabled=!busy,label={Text("思考")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
-                TextButton(enabled=false,onClick={}) {Text("附件")}
+                MeldwiseFilterChip(selected=thinking,onClick={onOptions(false);onThinking()},enabled=!busy,label={Text("思考")},shape=Radius.medium,modifier=Modifier.heightIn(min=Sizes.touch),border=null)
+                MeldwiseTextButton(enabled=false,onClick={}) {Text("附件")}
             }
         }
     }
@@ -321,7 +339,7 @@ private typealias Panel = ChatPanel
     }
 }
 @Composable private fun SettingsRow(title: String, subtitle: String, onClick: ()->Unit) {
-    Surface(onClick=onClick,shape=Radius.medium,color=MaterialTheme.colorScheme.surface) {
+    MeldwiseSurface(onClick=onClick,shape=Radius.medium,color=MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().heightIn(min=Sizes.touch).padding(Space.content)) {
             Text(title,style=MaterialTheme.typography.titleMedium)
             Text(subtitle,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)

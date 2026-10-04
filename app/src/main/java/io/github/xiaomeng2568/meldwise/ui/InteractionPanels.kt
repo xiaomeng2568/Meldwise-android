@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,15 +27,15 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
     AlertDialog(onDismissRequest=onCancel,
         title={Text("用 $name 继续聊？")},
         text={Text("继续会把这段对话中选入上下文的消息和回答发给 $name。思考过程只留在本机。这个选择只用于当前对话。")},
-        confirmButton={TextButton(onClick=onContinue) {Text("继续")}},
-        dismissButton={TextButton(onClick=onCancel) {Text("取消")}})
+        confirmButton={MeldwiseTextButton(onClick=onContinue) {Text("继续")}},
+        dismissButton={MeldwiseTextButton(onClick=onCancel) {Text("取消")}})
 }
 
 @Composable internal fun CollaborateSharingDialog(config:CollaborateConfig,onContinue:()->Unit,onCancel:()->Unit) {
     val names=config.providers.sorted().joinToString("、") {providerLabel(it)}
     AlertDialog(onDismissRequest=onCancel,title={Text("让 $names 一起协作？")},
         text={Text("协作会把选入上下文的消息，以及参与模型的可见回答发给所选服务商，用于审阅和综合。思考过程只留在本机。这个选择只用于当前对话和这组服务商。")},
-        confirmButton={TextButton(onClick=onContinue) {Text("继续")}},dismissButton={TextButton(onClick=onCancel) {Text("取消")}})
+        confirmButton={MeldwiseTextButton(onClick=onContinue) {Text("继续")}},dismissButton={MeldwiseTextButton(onClick=onCancel) {Text("取消")}})
 }
 
 @Composable internal fun ModePicker(enabled:Boolean,onSingle:()->Unit,onCompare:()->Unit,onCollaborate:()->Unit={},selected:HistoryCategory?=null) {
@@ -49,7 +48,7 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
 @Composable private fun ModeRow(mode:HistoryCategory,subtitle:String,enabled:Boolean,onClick:()->Unit,
     selected:Boolean=false,forward:Boolean=false) {
     val colors=MaterialTheme.colorScheme
-    Surface(onClick=onClick,enabled=enabled,shape=Radius.bubble,
+    MeldwiseSurface(onClick=onClick,enabled=enabled,shape=Radius.bubble,
         color=if(selected) colors.primaryContainer else colors.surfaceContainerLow,
         modifier=Modifier.testTag("modeRow-${mode.name}").semantics {this.selected=selected}) {
         Row(Modifier.fillMaxWidth().heightIn(min=Sizes.modeRowMin).padding(Space.section),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.content)) {
@@ -86,16 +85,16 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
     onOpen:()->Unit,onDelete:()->Unit,onMove:(Int)->Unit) {
     var menu by remember {mutableStateOf(false)}
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).clickable(enabled=!busy,onClick=onOpen).padding(vertical=Space.medium)) {
+        Column(Modifier.weight(1f).meldwiseClickable(enabled=!busy,onClick=onOpen).padding(vertical=Space.medium)) {
             Text(title,style=MaterialTheme.typography.bodyMedium,maxLines=2,overflow=TextOverflow.Ellipsis)
             Text(subtitle,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
         }
         Box {
             SoftAction(Glyph.More,"记录操作",{menu=true},enabled=!busy,tonal=false)
             DropdownMenu(expanded=menu,onDismissRequest={menu=false},shape=Radius.surface) {
-                DropdownMenuItem(text={Text("上移")},enabled=canUp && !busy,onClick={menu=false;onMove(-1)})
-                DropdownMenuItem(text={Text("下移")},enabled=canDown && !busy,onClick={menu=false;onMove(1)})
-                DropdownMenuItem(text={Text("删除")},enabled=!busy,onClick={menu=false;onDelete()})
+                MeldwiseMenuItem(text={Text("上移")},enabled=canUp && !busy,onClick={menu=false;onMove(-1)})
+                MeldwiseMenuItem(text={Text("下移")},enabled=canDown && !busy,onClick={menu=false;onMove(1)})
+                MeldwiseMenuItem(text={Text("删除")},enabled=!busy,onClick={menu=false;onDelete()})
             }
         }
     }
@@ -107,7 +106,7 @@ import io.github.xiaomeng2568.meldwise.ui.presentation.*
         if(current!=null) {
             val tones=noticeColors(current.kind)
             Surface(shape=Radius.surface,color=tones.first,border=BorderStroke(Sizes.noticeBorder,tones.second),
-                modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite}.clickable(role=Role.Button) {onDetails(current)}) {
+                modifier=Modifier.semantics {liveRegion=LiveRegionMode.Polite}.meldwiseClickable(role=Role.Button) {onDetails(current)}) {
                 Row(Modifier.padding(start=Space.content,top=Space.medium,bottom=Space.medium),verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(Space.medium)) {
                     if(current.kind==CatalogNoticeKind.Success) MeldwiseIcon(Glyph.Check) else Text("!",style=MaterialTheme.typography.titleMedium)

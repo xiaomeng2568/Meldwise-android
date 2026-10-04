@@ -2,7 +2,7 @@ package io.github.xiaomeng2568.meldwise.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
 import io.github.xiaomeng2568.meldwise.auth.*
@@ -26,7 +26,7 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
     PanelColumn("提供方与账号") {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(Space.small)) {
             listOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK).forEach {id ->
-                FilterChip(selected=screen.providerId==id,onClick={actions.chooseProvider(id)},enabled=!screen.busy,
+                MeldwiseFilterChip(selected=screen.providerId==id,onClick={actions.chooseProvider(id)},enabled=!screen.busy,
                     label={Text(providerLabel(id))},shape=Radius.medium,border=null,modifier=Modifier.weight(1f).heightIn(min=Sizes.touch))
             }
         }
@@ -34,15 +34,15 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
             Text("使用 ChatGPT 登录",style=MaterialTheme.typography.titleMedium)
             Text(authCaption(auth),style=MaterialTheme.typography.bodyMedium)
             Text("消息使用 ChatGPT 套餐额度。发送的内容会传给 OpenAI。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(enabled=!screen.busy && auth!=AuthState.StorageUnavailable,onClick=actions.connect) {Text("连接 ChatGPT")}
-            TextButton(enabled=!screen.busy && auth is AuthState.Connected,onClick=actions.disconnect) {Text("本机断开")}
+            MeldwiseButton(enabled=!screen.busy && auth!=AuthState.StorageUnavailable,onClick=actions.connect) {Text("连接 ChatGPT")}
+            MeldwiseTextButton(enabled=!screen.busy && auth is AuthState.Connected,onClick=actions.disconnect) {Text("本机断开")}
             Notice("本机断开会清除本地连接，远端会话需在服务商处管理。SIWC 兼容性仍为有条件通过。")
         } else {
             Text("使用 DeepSeek API Key",style=MaterialTheme.typography.titleMedium)
             Text("密钥状态：${keyCaption(apiState)}",style=MaterialTheme.typography.bodyMedium)
             Text("按 DeepSeek API 计费。发送的内容会传给 DeepSeek。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(enabled=!screen.busy && apiState!=ApiKeyState.UNAVAILABLE,onClick=actions.configureKey) {Text(if(apiState==ApiKeyState.CONFIGURED) "替换密钥" else "配置密钥")}
-            TextButton(enabled=!screen.busy && apiState!=ApiKeyState.MISSING,onClick=actions.removeKey) {Text("删除本机密钥")}
+            MeldwiseButton(enabled=!screen.busy && apiState!=ApiKeyState.UNAVAILABLE,onClick=actions.configureKey) {Text(if(apiState==ApiKeyState.CONFIGURED) "替换密钥" else "配置密钥")}
+            MeldwiseTextButton(enabled=!screen.busy && apiState!=ApiKeyState.MISSING,onClick=actions.removeKey) {Text("删除本机密钥")}
             Notice("密钥加密保存在这台设备。保存后的完整密钥不会重新显示。删除本机密钥后，历史对话会保留。")
         }
         screen.error?.let {Notice(errorLabel(it),"操作提示",error=true)}
@@ -52,21 +52,24 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
 @Composable internal fun ModelPicker(screen: ScreenState, ready: Boolean, actions: ChatActions,
     onSettings: ()->Unit, onSelected: ()->Unit,catalogs:Map<String,List<LlmModel>> = emptyMap(),onPick:(ModelRef)->Unit=actions.selectModel,
     loading:Set<String> = emptySet(),selection:ModelRef?=screen.selected,preference:ReasoningPreference=ReasoningPreference.Auto,
-    onThinking:(ReasoningPreference)->Unit=actions.thinking) {
+    onThinking:(ReasoningPreference)->Unit=actions.thinking,scope:PickerScope=PickerScope.Single,
+    readyForProvider:(String)->Boolean={it==screen.providerId && ready}) {
+    // Selection changes and cached-catalog updates must not expand another provider implicitly.
+    var browser by remember(scope) {mutableStateOf(ModelPickerState.initial(selection,screen.providerId))}
     PanelColumn("选择模型") {
         listOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK).forEach {id ->
-            val active=screen.providerId==id
+            val active=browser.shows(id)
                 Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
-                    TextButton(enabled=!screen.busy,onClick={actions.chooseProvider(id)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch)) {
+                    MeldwiseTextButton(enabled=!screen.busy,onClick={browser=browser.browse(id)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {stateDescription=if(active) "已展开" else "已折叠"}) {
                         Text(providerLabel(id),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
                         if(active) MeldwiseIcon(Glyph.Check)
                     }
                     Text(if(id==ProviderIds.CHATGPT) "ChatGPT 套餐" else "DeepSeek API 计费",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier=Modifier.padding(horizontal=Space.medium))
-                    val listed=catalogs[id] ?: if(active) screen.models else emptyList()
+                    val listed=if(active) catalogs[id] ?: if(screen.providerId==id) screen.models else emptyList() else emptyList()
                     listed.forEach {model ->
                             val ref=ModelRef(id,model.id)
-                            TextButton(enabled=!screen.busy,onClick={onPick(ref);onSelected()},
+                            MeldwiseTextButton(enabled=!screen.busy,onClick={onPick(ref);onSelected()},
                                 modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {selected=selectedModel(selection,ref)}) {
                                 Text(modelLabel(ref,model.displayName),Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
                                 if(selectedModel(selection,ref)) MeldwiseIcon(Glyph.Check)
@@ -74,13 +77,14 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
                             if(selectedModel(selection,ref)) ThinkingChoices(ref,preference,enabled=!screen.busy,onThinking)
                         }
                     if(active) {
-                        if(screen.models.isEmpty()) Text(if(id in loading) "正在更新模型…" else if(ready) "还没有可用模型。" else "先连接账号或配置密钥。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(enabled=ready && !screen.busy && id !in loading,onClick=actions.loadModels) {Text(if(id in loading) "更新中…" else "更新模型")}
+                        if(listed.isEmpty()) Text(if(id in loading) "正在更新模型…" else if(readyForProvider(id)) "还没有可用模型。" else "先连接账号或配置密钥。",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        MeldwiseTextButton(enabled=readyForProvider(id) && !screen.busy && id !in loading,
+                            onClick={actions.refreshModels(id)}) {Text(if(id in loading) "更新中…" else "更新模型")}
                     }
                 }
         }
         screen.error?.let {Notice(errorLabel(it),"操作提示",error=true)}
-        TextButton(onClick=onSettings) {Text("管理提供方与账号")}
+        MeldwiseTextButton(onClick=onSettings) {Text("管理提供方与账号")}
     }
 }
 @Composable internal fun DiagnosticsPanel(screen: ScreenState, inference: InferenceDiagnostic?) {

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
@@ -67,10 +68,14 @@ internal fun accentColors(darkMode:Boolean,rgb:Long?):ColorScheme {
     val container=androidx.compose.ui.graphics.lerp(base.background,primary,if(darkMode) .18f else .10f)
     return base.copy(primary=primary,onPrimary=onPrimary,primaryContainer=container,onPrimaryContainer=base.onBackground)
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MeldwiseTheme(appearance: Appearance = Appearance.System, accent:Long?=null, content: @Composable () -> Unit) {
     val isDark = when(appearance) { Appearance.System->isSystemInDarkTheme(); Appearance.Light->false; Appearance.Dark->true }
     MaterialTheme(colorScheme=remember(isDark,accent) {accentColors(isDark,accent)}, typography=type,
-        shapes=Shapes(small=Radius.small,medium=Radius.medium,large=Radius.bubble,extraLarge=Radius.composer),content=content)
+        shapes=Shapes(small=Radius.small,medium=Radius.medium,large=Radius.bubble,extraLarge=Radius.composer)) {
+        // Project controls supply a shared, non-radial state layer using the same interaction source.
+        CompositionLocalProvider(LocalRippleConfiguration provides null,content=content)
+    }
 }
 @Composable fun codeStyle() = MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace)
 @Composable internal fun noticeColors(kind:io.github.xiaomeng2568.meldwise.data.CatalogNoticeKind):Pair<Color,Color> {

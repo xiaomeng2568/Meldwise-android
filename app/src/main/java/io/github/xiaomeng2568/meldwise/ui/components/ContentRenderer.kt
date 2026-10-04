@@ -23,12 +23,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import io.github.xiaomeng2568.meldwise.ui.content.*
 import io.github.xiaomeng2568.meldwise.ui.theme.*
 
@@ -48,6 +42,7 @@ fun copyContent(context: Context, text: String) {
         content.blocks.forEach { block ->
             when(block) {
                 is TextBlock -> RichTextBlock(block)
+                is MathBlock -> DisplayMath(block)
                 is PlainTextBlock -> LiteralSurface(block.text,"纯文本 · Plain text")
                 is CodeBlock -> LiteralSurface(block.text,block.language ?: "代码 · Code")
                 is QuoteBlock -> Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=Radius.medium) {
@@ -65,18 +60,6 @@ fun copyContent(context: Context, text: String) {
     }
 }
 @Composable private fun RichTextBlock(block: TextBlock) {
-    val colors=MaterialTheme.colorScheme
-    val styled=remember(block.text,colors) { buildAnnotatedString {
-        InlineParser.parse(block.text).forEach { run ->
-            val style=when(run.style) {
-                InlineStyle.Strong -> SpanStyle(fontWeight=FontWeight.Bold)
-                InlineStyle.Emphasis -> SpanStyle(fontStyle=FontStyle.Italic)
-                InlineStyle.Code -> SpanStyle(fontFamily=FontFamily.Monospace,background=colors.surfaceVariant)
-                InlineStyle.Normal -> SpanStyle()
-            }
-            withStyle(style) { append(run.text) }
-        }
-    } }
     val style=when(block.heading) {
         1 -> MaterialTheme.typography.headlineMedium
         2 -> MaterialTheme.typography.titleLarge
@@ -86,7 +69,7 @@ fun copyContent(context: Context, text: String) {
     Row(horizontalArrangement=Arrangement.spacedBy(Space.small)) {
         block.listMarker?.let { Text(it,style=style) }
         Column(Modifier.weight(1f)) {
-            SelectionContainer { Text(styled,style=style) }
+            MathRichText(block.text,style)
             if(block.text.length>RenderBounds.INLINE_CHARS) Text("本段较长，切换纯文本查看更多。",style=MaterialTheme.typography.bodySmall)
         }
     }
@@ -131,7 +114,7 @@ fun copyContent(context: Context, text: String) {
     val noun=if(summary.kind==ReasoningKind.Summary) "思考摘要" else "思考过程"
     val label=if(expanded) "收起$noun" else "查看$noun"
     Column(Modifier.testTag("reasoningDisclosure"),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
-        Row(Modifier.heightIn(min=Sizes.touch).clickable(role=Role.Button) {expanded=!expanded}
+        Row(Modifier.heightIn(min=Sizes.touch).meldwiseClickable(role=Role.Button) {expanded=!expanded}
             .semantics {stateDescription=if(expanded) "已展开" else "已折叠"},
             verticalAlignment=androidx.compose.ui.Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(Space.small)) {
             MeldwiseIcon(if(expanded) Glyph.Close else Glyph.Chevron)

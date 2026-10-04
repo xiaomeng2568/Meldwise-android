@@ -29,6 +29,12 @@ Third-party components retain their own licenses and copyright notices. The root
 | Skia-derived native path code used by AndroidX Graphics Path | BSD-3-Clause | [AndroidX Graphics Path](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/graphics/graphics-path/), [Skia](https://github.com/google/skia), notice reproduced below |
 | Public Suffix List data bundled by OkHttp | MPL-2.0; secondary-license terms of section 3.3 apply to the combined GPL work | [OkHttp's versioned bundled data and notice](https://github.com/square/okhttp/tree/parent-4.12.0/okhttp/src/main/resources/okhttp3/internal/publicsuffix), [Public Suffix List source](https://publicsuffix.org/list/public_suffix_list.dat) |
 | Gradle wrapper/build tooling | Apache-2.0 | [Gradle](https://github.com/gradle/gradle), original headers retained |
+| Orcex 0.5.0 core / layout / Android renderer / font loader | Apache-2.0 | [Orcex source and license](https://github.com/wertikolix/Orcex), copyright its respective contributors; unmodified upstream modules |
+| STIX Two Math font bundled by Orcex | OFL-1.1 | [STIX Fonts](https://github.com/stipub/stixfonts); copyright 2001–2021 The STIX Fonts Project Authors, reserved font name “TM Math” |
+
+Orcex 使用原生 Canvas 绘制公式。STIX Two Math 字体未修改，继续适用 OFL-1.1，不属于 Meldwise 的 GPL 许可；APK 保留上游字体及完整版权/许可文件 `assets/orcex/fonts/OFL.txt`。Orcex 代码的 Apache-2.0 条款见本文下方，不使用 WebView 或远程公式服务。
+
+Orcex draws formulas on a native Canvas. The unmodified STIX Two Math font remains under OFL-1.1, not Meldwise's GPL grant. The APK retains its complete upstream copyright/license at `assets/orcex/fonts/OFL.txt`. The Apache-2.0 terms for Orcex code are reproduced below; no WebView or remote math service is used.
 
 版本与全部模块坐标见公开的 Gradle 声明和锁文件。上游源码可从表中项目按对应版本取得；这些组件未在 Meldwise 中修改。Apache-2.0 与 GPL v3 的兼容说明见 [Apache 官方说明](https://www.apache.org/licenses/GPL-compatibility)。公共后缀数据原始 MPL-2.0 权利继续保留，在本组合发行中依第 3.3 节同时按 GPL-3.0-only 提供；参见 [Mozilla FAQ 第 14 项](https://www.mozilla.org/en-US/MPL/2.0/FAQ/#q14-may-i-combine-mpl-licensed-code-and-lgpl-licensed-code-in-the-same-executable-program)。
 

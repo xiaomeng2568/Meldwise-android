@@ -50,7 +50,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
         ReasoningPanel(lane.reasoning)
         ContentRenderer(remember(lane.answer) {ContentParser.parse(lane.answer)})
         if(lane.answer.isNotEmpty()) MessageActions(lane.answer)
-        if(onDetails!=null && lane.state in setOf(LaneState.Failed,LaneState.Incomplete,LaneState.Interrupted)) TextButton(onClick=onDetails) {Text("查看详情")}
+        if(onDetails!=null && lane.state in setOf(LaneState.Failed,LaneState.Incomplete,LaneState.Interrupted)) MeldwiseTextButton(onClick=onDetails) {Text("查看详情")}
     }
 }
 @Composable private fun MessageActions(text:String) {
@@ -62,7 +62,7 @@ import io.github.xiaomeng2568.meldwise.ui.theme.*
             SoftAction(Glyph.More,"更多内容操作",{menu=true})
             MaterialTheme(shapes=MaterialTheme.shapes.copy(extraSmall=Radius.medium)) {
                 DropdownMenu(expanded=menu,onDismissRequest={menu=false}) {
-                    DropdownMenuItem(text={Text(if(plain) "恢复排版" else "按纯文本查看")},onClick={plain=!plain;menu=false})
+                    MeldwiseMenuItem(text={Text(if(plain) "恢复排版" else "按纯文本查看")},onClick={plain=!plain;menu=false})
                 }
             }
         }
