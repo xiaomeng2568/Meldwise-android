@@ -47,11 +47,11 @@ class UiFoundationTest {
     }
     @Test fun unavailableReasoningIsAbsent() {
         compose.setContent {MeldwiseTheme {Column {ReasoningPanel(ReasoningSummary());ContentRenderer(ContentParser.parse("final answer"))}}}
-        compose.onNodeWithText("查看思考摘要").assertDoesNotExist();compose.onNodeWithText("final answer").assertExists()
+        compose.onNodeWithContentDescription("查看思考摘要").assertDoesNotExist();compose.onNodeWithText("final answer").assertExists()
     }
     @Test fun summaryIsCollapsedAndSeparate() {
         compose.setContent {MeldwiseTheme {Column {ReasoningPanel(ReasoningSummary(ReasoningState.Completed,"separate summary"));ContentRenderer(ContentParser.parse("answer"))}}}
-        compose.onNodeWithText("separate summary").assertDoesNotExist();compose.onNodeWithText("查看思考摘要").performClick()
+        compose.onNodeWithText("separate summary").assertDoesNotExist();compose.onNodeWithContentDescription("查看思考摘要").performClick()
         compose.onNodeWithText("separate summary").assertExists();compose.onNodeWithText("answer").assertExists()
     }
     @Test fun compareLanesRenderIndependentStatesInDarkMode() {
@@ -114,7 +114,7 @@ class UiFoundationTest {
         compose.setContent {MeldwiseTheme {MessageCard(ChatMessage("local",null,MessageRole.ASSISTANT,"ANSWER",MessageState.STREAMING,
             ReasoningRecord("VISIBLE_REASONING",ReasoningContent.ProviderVisibleReasoning,ReasoningPhase.Streaming)),ref,"V4.1")}}
         compose.onNodeWithText("ANSWER").assertExists();compose.onNodeWithText("VISIBLE_REASONING").assertDoesNotExist()
-        compose.onNodeWithText("查看思考过程").performClick();compose.onNodeWithText("VISIBLE_REASONING").assertExists()
+        compose.onNodeWithContentDescription("查看思考过程").performClick();compose.onNodeWithText("VISIBLE_REASONING").assertExists()
         compose.onNodeWithText("VISIBLE_REASONINGANSWER").assertDoesNotExist()
     }
     @Test fun pickerPreservesIdentityAcrossCachedProviders() {

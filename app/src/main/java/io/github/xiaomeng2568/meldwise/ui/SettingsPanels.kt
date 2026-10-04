@@ -1,9 +1,15 @@
 package io.github.xiaomeng2568.meldwise.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.*
 import io.github.xiaomeng2568.meldwise.auth.*
 import io.github.xiaomeng2568.meldwise.network.InferenceDiagnostic
@@ -59,10 +65,11 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
     PanelColumn("选择模型") {
         listOf(ProviderIds.CHATGPT,ProviderIds.DEEPSEEK).forEach {id ->
             val active=browser.shows(id)
-                Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
+                Column(Modifier.fillMaxWidth().animateContentSize(tween(Motion.switchMs,easing=Motion.easing)),verticalArrangement=Arrangement.spacedBy(Space.micro)) {
                     MeldwiseTextButton(enabled=!screen.busy,onClick={browser=browser.browse(id)},modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {stateDescription=if(active) "已展开" else "已折叠"}) {
-                        Text(providerLabel(id),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
-                        if(active) MeldwiseIcon(Glyph.Check)
+                        Text(providerLabel(id),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface)
+                        val angle by animateFloatAsState(if(active) 180f else 0f,tween(Motion.switchMs,easing=Motion.easing),label="providerDisclosure")
+                        MeldwiseIcon(Glyph.Chevron,Modifier.graphicsLayer {rotationZ=angle},opticalSize=18.dp)
                     }
                     Text(if(id==ProviderIds.CHATGPT) "ChatGPT 套餐" else "DeepSeek API 计费",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier=Modifier.padding(horizontal=Space.medium))
@@ -71,8 +78,9 @@ fun keyCaption(state: ApiKeyState): String = when(state) {
                             val ref=ModelRef(id,model.id)
                             MeldwiseTextButton(enabled=!screen.busy,onClick={onPick(ref);onSelected()},
                                 modifier=Modifier.fillMaxWidth().heightIn(min=Sizes.touch).semantics {selected=selectedModel(selection,ref)}) {
-                                Text(modelLabel(ref,model.displayName),Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
-                                if(selectedModel(selection,ref)) MeldwiseIcon(Glyph.Check)
+                                Text(modelLabel(ref,model.displayName),Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium,
+                                    color=MaterialTheme.colorScheme.onSurface,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                if(selectedModel(selection,ref)) MeldwiseIcon(Glyph.Check,opticalSize=18.dp)
                             }
                             if(selectedModel(selection,ref)) ThinkingChoices(ref,preference,enabled=!screen.busy,onThinking)
                         }

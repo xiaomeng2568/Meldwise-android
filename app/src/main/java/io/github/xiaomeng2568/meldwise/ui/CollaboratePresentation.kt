@@ -25,13 +25,15 @@ fun collaborateErrorLabel(kind:ErrorKind)=if(kind==ErrorKind.PLAN_USAGE_LIMIT)
     "当前 ChatGPT 套餐或所选模型的可用额度已达到限制。可以稍后再试，或调整协作模型后重新执行。" else errorLabel(kind.name)
 sealed class CollaborateMessageItem(val key:String) {
     class Prompt(val message:ChatMessage):CollaborateMessageItem(message.id)
-    class Stage(val roundId:String,val stage:CollaborateStage):CollaborateMessageItem(stage.stageId)
+    class Stage(val roundId:String,val stage:CollaborateStage,val reviewIntensity:ReviewIntensity=ReviewIntensity.STANDARD):CollaborateMessageItem(stage.stageId)
     override fun toString()="CollaborateMessageItem([REDACTED])"
 }
 fun collaborateMessageItems(c:Conversation):List<CollaborateMessageItem> {
     require(c.mode==ConversationMode.Collaborate)
-    return c.messages.flatMap {user ->listOf(CollaborateMessageItem.Prompt(user))+
-        c.rounds.single {it.userMessageId==user.id}.stages.map {CollaborateMessageItem.Stage(c.rounds.single {r ->r.userMessageId==user.id}.roundId,it)}}
+    return c.messages.flatMap {user ->
+        val round=c.rounds.single {it.userMessageId==user.id}
+        listOf(CollaborateMessageItem.Prompt(user))+round.stages.map {CollaborateMessageItem.Stage(round.roundId,it,round.reviewIntensity)}
+    }
 }
 @Composable internal fun CollaborateMessage(item:CollaborateMessageItem) {
     when(item) {
@@ -39,11 +41,12 @@ fun collaborateMessageItems(c:Conversation):List<CollaborateMessageItem> {
         is CollaborateMessageItem.Stage->{
             val s=item.stage
             Column(Modifier.fillMaxWidth().testTag("collaborateStage/${s.order}"),verticalArrangement=Arrangement.spacedBy(Space.small)) {
-                Text(collaborateStageLabel(s.type)+if(s.state==CollaborateStageState.NotRun) " · 未执行" else "",
-                    style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                val heading=collaborateStageLabel(s.type)+if(s.type==CollaborateStageType.REVIEW) " · ${reviewIntensityLabel(item.reviewIntensity)}" else ""
+                if(s.state==CollaborateStageState.NotRun) Text("$heading · 未执行",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if(s.state!=CollaborateStageState.NotRun) {
                     AssistantOutput(CompareLane(s.model.ref,s.model.displayName ?: s.model.ref.modelId,collaborateLaneState(s),
-                        s.output,reasoningPresentation(s.reasoning),s.processingDuration))
+                        s.output,reasoningPresentation(s.reasoning),s.processingDuration),heading=heading,
+                        role=when(s.type) {CollaborateStageType.INITIAL->AnswerRole.Initial;CollaborateStageType.REVIEW->AnswerRole.Review;CollaborateStageType.SYNTHESIS->AnswerRole.Synthesis})
                     s.error?.let {kind ->
                         Text(collaborateErrorLabel(kind),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
                         var details by remember {mutableStateOf(false)}

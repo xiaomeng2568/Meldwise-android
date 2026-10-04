@@ -64,17 +64,17 @@ class FlatCompareVisualTest {
         fixture();compose.onNodeWithText("你好").assertExists();compose.onNodeWithText("ChatGPT-5.6-Luna").assertExists()
         compose.onNodeWithText("DeepSeek-V4.1-Flash").assertExists();compose.onAllNodesWithTag("assistantOutput").assertCountEquals(2)
         compose.onNodeWithContentDescription("ChatGPT 提供方").assertDoesNotExist();compose.onNodeWithContentDescription("DeepSeek 提供方").assertDoesNotExist()
-        compose.onAllNodesWithTag("reasoningDisclosure").assertCountEquals(1);compose.onNodeWithText("查看思考过程").assertExists()
+        compose.onAllNodesWithTag("reasoningDisclosure").assertCountEquals(1);compose.onNodeWithContentDescription("查看思考过程").assertExists()
         compose.onNodeWithTag("composer").assertHeightIsEqualTo(48.dp);compose.onNodeWithTag("composerSurface",true).assertHeightIsEqualTo(44.dp)
         capture("01-compare-light-collapsed")
     }
     @Test fun lightReasoningExpandedAndCollapsible() {
-        fixture();compose.onNodeWithText("查看思考过程").performClick();compose.onNodeWithText("收起思考过程").assertExists()
+        fixture();compose.onNodeWithContentDescription("查看思考过程").performClick();compose.onNodeWithContentDescription("收起思考过程").assertExists()
         compose.onNodeWithText("你好，很高兴见到你。").assertExists();capture("02-compare-light-expanded")
-        compose.onNodeWithText("收起思考过程").performClick();compose.onNodeWithText("查看思考过程").assertExists()
+        compose.onNodeWithContentDescription("收起思考过程").performClick();compose.onNodeWithContentDescription("查看思考过程").assertExists()
     }
     @Test fun darkFlatFlow() {fixture(dark=true);capture("03-compare-dark-collapsed")}
-    @Test fun darkReasoningExpanded() {fixture(dark=true);compose.onNodeWithText("查看思考过程").performClick();capture("04-compare-dark-expanded")}
+    @Test fun darkReasoningExpanded() {fixture(dark=true);compose.onNodeWithContentDescription("查看思考过程").performClick();capture("04-compare-dark-expanded")}
     @Test fun thinkingChoiceAppliesWithoutSecondConfirmation() {
         fixture(dark=true);compose.onNodeWithText("对比").performClick();compose.onNodeWithText("好了").assertDoesNotExist()
         compose.onNodeWithText("关闭").assertExists();capture("05-compact-settings")
